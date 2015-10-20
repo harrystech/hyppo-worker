@@ -1,0 +1,71 @@
+package com.harrys.hyppo.worker.cache
+
+import java.io.File
+import java.nio.file.Files
+
+import akka.actor.{Actor, ActorLogging, ActorRef}
+import akka.pattern.pipe
+import com.amazonaws.services.s3.AmazonS3Client
+import com.amazonaws.services.s3.model.S3Object
+import com.harrys.hyppo.config.WorkerConfig
+import com.harrys.hyppo.worker.api.code.IntegrationJarFile
+import org.apache.commons.io.{FileCleaningTracker, FileUtils, FilenameUtils}
+
+import scala.concurrent.Future
+
+final class JarLoadingActor(config: WorkerConfig) extends Actor with ActorLogging {
+  import JarLoadingActor._
+  //  Load the dispatcher as the default execution context
+  import context.dispatcher
+
+  private val client   = new AmazonS3Client(config.awsCredentialsProvider)
+  private val tracker  = new FileCleaningTracker()
+
+  override def postStop(): Unit = {
+    super.postStop()
+    tracker.exitWhenFinished()
+  }
+
+  override def receive: Receive = {
+    case LoadJars(jarFiles) =>
+      loadJarFiles(jarFiles, sender())
+  }
+
+  def loadJarFiles(jarFiles: Seq[IntegrationJarFile], recipient: ActorRef) : Unit = {
+    Future.sequence(
+      jarFiles.map(jar => loadedJarFuture(jar))
+    ).map(jars => JarsResult(jars)).pipeTo(recipient)
+  }
+
+
+  private def loadedJarFuture(jar: IntegrationJarFile) : Future[LoadedJarFile] = Future {
+    log.debug(s"Loading Jar File From S3: ${jar.toString}")
+    val s3Object = client.getObject(jar.bucketName, jar.objectKey)
+    try {
+      val tempFile = downloadToFile(s3Object, Files.createTempFile(FilenameUtils.removeExtension(FilenameUtils.getBaseName(jar.objectKey)), "jar").toFile)
+      //  We're now tying the lifecycle of this file to the specific key that made the request
+      tracker.track(tempFile, jar)
+      //  Since we return the result with the key attached, we can guarantee that the file lives as long as the cached value
+      LoadedJarFile(jar, tempFile)
+    } finally {
+      s3Object.close()
+    }
+  }
+
+
+  private def downloadToFile(s3Obj: S3Object, file: File) : File = {
+    try {
+      FileUtils.copyInputStreamToFile(s3Obj.getObjectContent, file)
+    } catch {
+      case e: Exception =>
+        file.delete()
+        throw e
+    }
+    file
+  }
+}
+
+object JarLoadingActor {
+  case class LoadJars(jars: Seq[IntegrationJarFile])
+  case class JarsResult(jars: Seq[LoadedJarFile])
+}

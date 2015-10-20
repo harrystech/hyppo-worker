@@ -1,0 +1,9 @@
+{"namespace": "io.ingestion.worker.api.data",
+ "type": "record",
+ "name": "TestRecord",
+ "fields": [
+     {"name": "name", "type": "string"},
+     {"name": "valueOne",  "type": ["int", "null"]},
+     {"name": "valueTwo", "type": ["long", "null"]}
+ ]
+}
