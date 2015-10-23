@@ -58,7 +58,9 @@ final class CommanderActor
 
   //  Easier access to executor STDOUT / STDERR streams on disk
   def standardErrorContents: String = Source.fromFile(simpleCommander.executor.files.standardErrorFile).mkString
-  def standardOutContents: String = Source.fromFile(simpleCommander.executor.files.standardOutFile).mkString
+  def previousOutContents: String = {
+    Source.fromFile(simpleCommander.executor.files.lastStdoutFile).mkString
+  }
 
   override def postStop() : Unit = {
     simpleCommander.forceShutdown()

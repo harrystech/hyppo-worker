@@ -29,7 +29,7 @@ public final class ExecutorMain {
         try {
             looper.initializeIntegration();
         } catch (Exception e){
-            System.err.println("Failure initializing integration instance" + e.toString());
+            System.err.println("Failure initializing integration instance: " + e.toString());
             e.printStackTrace(System.err);
             System.err.flush();
             System.exit(1);

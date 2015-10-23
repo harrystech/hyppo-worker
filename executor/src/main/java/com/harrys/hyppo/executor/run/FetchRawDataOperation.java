@@ -1,7 +1,7 @@
 package com.harrys.hyppo.executor.run;
 
-import com.harrys.hyppo.executor.proto.com.FetchRawDataCommand;
 import com.harrys.hyppo.executor.net.WorkerIPCSocket;
+import com.harrys.hyppo.executor.proto.com.FetchRawDataCommand;
 import com.harrys.hyppo.executor.proto.res.FetchRawDataResult;
 import com.harrys.hyppo.source.api.DataIntegration;
 import com.harrys.hyppo.source.api.RawDataIntegration;

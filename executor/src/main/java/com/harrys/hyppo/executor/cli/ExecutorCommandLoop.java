@@ -1,17 +1,20 @@
 package com.harrys.hyppo.executor.cli;
 
+import com.harrys.hyppo.executor.net.CommanderSocketHandler;
 import com.harrys.hyppo.executor.net.IPCMessageFrame;
+import com.harrys.hyppo.executor.net.WorkerIPCSocket;
 import com.harrys.hyppo.executor.proto.ExecutorError;
 import com.harrys.hyppo.executor.proto.StartOperationCommand;
-import com.harrys.hyppo.executor.net.CommanderSocketHandler;
-import com.harrys.hyppo.executor.net.WorkerIPCSocket;
 import com.harrys.hyppo.executor.proto.init.InitializationFailed;
 import com.harrys.hyppo.source.api.DataIntegration;
 import com.harrys.hyppo.source.api.ProcessedDataIntegration;
 import com.harrys.hyppo.source.api.RawDataIntegration;
 import org.codehaus.jackson.map.ObjectMapper;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 
 /**
  * Created by jpetty on 7/21/15.
@@ -26,6 +29,8 @@ public final class ExecutorCommandLoop {
 
     private DataIntegration<?> integration = null;
 
+    private int taskCount = 0;
+
     public ExecutorCommandLoop(final int serverPort, final String className){
         this.serverPort  = serverPort;
         this.className   = className;
@@ -39,6 +44,8 @@ public final class ExecutorCommandLoop {
         foreverLoop:
         while (true){
             try (final WorkerIPCSocket socket = this.connectToCommander()){
+                //  Rotate the log files so this task has a dedicated debugging output
+                this.rotateStdoutStream();
                 //  Create the handler instance to facilitate this iteration, closes socket at the end
                 final CommanderSocketHandler handler = new CommanderSocketHandler(mapper, socket, this.integration);
                 final StartOperationCommand command  = handler.readCommand();
@@ -53,19 +60,31 @@ public final class ExecutorCommandLoop {
                         throw e;
                     }
                 }
+            } finally {
+                //  Ensure any buffered content in STDOUT is flushed before blocking to reconnect
+                System.out.flush();
             }
         }
     }
 
-    public final synchronized void initializeIntegration() throws Exception {
+    public final synchronized void initializeIntegration() throws InvalidIntegrationClassException {
         try {
             if (this.integration == null){
                 this.integration = createIntegrationInstance(this.className);
             }
-        } catch (Exception e){
+        } catch (InvalidIntegrationClassException e){
             this.sendInitFailureIfPossible(e);
             throw e;
         }
+    }
+
+    private final void rotateStdoutStream() throws IOException {
+        taskCount++;
+        final File logFile = new File(String.format("../log/%5d.out", taskCount));
+        System.out.println("Rotating to next STDOUT file: " + logFile.getPath());
+        System.out.close();
+        System.setOut(new PrintStream(new FileOutputStream(logFile)));
+        System.out.println("Successfully rotated to new STDOUT file: " + logFile.getPath());
     }
 
     private final void sendFailureIfPossible(final WorkerIPCSocket socket, final Exception e){
@@ -98,8 +117,13 @@ public final class ExecutorCommandLoop {
     }
 
     @SuppressWarnings("unchecked")
-    public static final DataIntegration<?> createIntegrationInstance(final String className) throws ClassNotFoundException, InvalidIntegrationClassException {
-        final Class<?> initialClass = Class.forName(className);
+    public static final DataIntegration<?> createIntegrationInstance(final String className) throws InvalidIntegrationClassException {
+        final Class<?> initialClass;
+        try {
+            initialClass = Class.forName(className);
+        } catch (ClassNotFoundException cnf){
+            throw new InvalidIntegrationClassException("No class exists with name: " + className, cnf);
+        }
 
         final Class<? extends DataIntegration<?>> castClass;
         if (DataIntegration.class.isAssignableFrom(initialClass)) {

@@ -46,7 +46,7 @@ abstract class ExecutorCommandTest extends WordSpecLike with BeforeAndAfterAll w
     }
   }
 
-  def standardOutContents() : String = Source.fromFile(executorProcess.files.standardOutFile).getLines().mkString("\n")
+  def standardOutContents() : String = Source.fromFile(executorProcess.files.lastStdoutFile).getLines().mkString("\n")
 
   def standardErrorContents() : String = Source.fromFile(executorProcess.files.standardErrorFile).getLines().mkString("\n")
 

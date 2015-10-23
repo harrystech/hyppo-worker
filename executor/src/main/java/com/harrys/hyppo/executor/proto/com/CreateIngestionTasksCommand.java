@@ -23,7 +23,6 @@ public final class CreateIngestionTasksCommand extends StartOperationCommand {
         this.job = job;
     }
 
-
     public final DataIngestionJob getJob(){
         return this.job;
     }

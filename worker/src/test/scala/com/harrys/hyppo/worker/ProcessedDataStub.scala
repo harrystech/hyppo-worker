@@ -24,8 +24,8 @@ class ProcessedDataStub extends ProcessedDataIntegration[TestRecord] {
 
   override def validateTaskArguments(task: DataIngestionTask): ValidationResult = ValidationResult.valid()
 
-  override def newIngestionTaskCreator(): TaskCreator = new TaskCreator {
-    override def createTasks(operation: CreateTasksForJob): Unit = {
+  override def newIngestionTaskCreator(): IngestionTaskCreator = new IngestionTaskCreator {
+    override def createIngestionTasks(operation: CreateIngestionTasks): Unit = {
       operation.getTaskBuilder.addTask(JavaConversions.mapAsJavaMap(Map[String, AnyRef]()))
     }
   }
@@ -40,7 +40,7 @@ class ProcessedDataStub extends ProcessedDataIntegration[TestRecord] {
     }
   }
 
-  override def newDataPersister(): ProcessedDataPersister[TestRecord] = new ProcessedDataPersister[TestRecord] {
+  override def newProcessedDataPersister(): ProcessedDataPersister[TestRecord] = new ProcessedDataPersister[TestRecord] {
     override def persistProcessedData(operation: PersistProcessedData[TestRecord]): Unit = {
       JavaConversions.asScalaIterator(operation.openReader()).foreach { record =>
         log.info(s"Recieved record: ${ record.toString }")

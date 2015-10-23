@@ -1,7 +1,7 @@
 package com.harrys.hyppo.executor.run;
 
-import com.harrys.hyppo.executor.proto.com.ValidateIntegrationCommand;
 import com.harrys.hyppo.executor.net.WorkerIPCSocket;
+import com.harrys.hyppo.executor.proto.com.ValidateIntegrationCommand;
 import com.harrys.hyppo.executor.proto.res.ValidateIntegrationResult;
 import com.harrys.hyppo.source.api.DataIntegration;
 import com.harrys.hyppo.source.api.ValidationResult;
@@ -34,6 +34,9 @@ public final class ValidateIntegrationOperation extends ExecutorOperation<Valida
 
         final AvroRecordType<? extends SpecificRecord> avroType = integration.avroType();
 
-        return new ValidateIntegrationResult(this.getSource(), this.isRawDataIntegration(), avroType.recordSchema());
+        //  At this point we only handle the valid case well, this can by dynamic later
+        final boolean isValid = true;
+
+        return new ValidateIntegrationResult(this.getSource(), isValid, this.isRawDataIntegration(), avroType.recordSchema());
     }
 }

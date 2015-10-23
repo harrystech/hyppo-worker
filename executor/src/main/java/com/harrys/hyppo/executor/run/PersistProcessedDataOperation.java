@@ -1,7 +1,7 @@
 package com.harrys.hyppo.executor.run;
 
-import com.harrys.hyppo.executor.proto.com.PersistProcessedDataCommand;
 import com.harrys.hyppo.executor.net.WorkerIPCSocket;
+import com.harrys.hyppo.executor.proto.com.PersistProcessedDataCommand;
 import com.harrys.hyppo.executor.proto.res.PersistProcessedDataResult;
 import com.harrys.hyppo.source.api.DataIntegration;
 import com.harrys.hyppo.source.api.ValidationResult;
@@ -53,7 +53,7 @@ public final class PersistProcessedDataOperation extends ExecutorOperation<Persi
             throw validationSum.toValidationException();
         }
 
-        final ProcessedDataPersister<? extends SpecificRecord> persister = integration.newDataPersister();
+        final ProcessedDataPersister<? extends SpecificRecord> persister = integration.newProcessedDataPersister();
         persister.persistProcessedData(new PersistProcessedData(this.getTask(), integration.avroType(), this.getLocalDataFile()));
 
         return new PersistProcessedDataResult(this.getTask());

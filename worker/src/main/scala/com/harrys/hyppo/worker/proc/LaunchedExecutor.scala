@@ -27,19 +27,21 @@ final class LaunchedExecutor(val process: Process, val files: ExecutorFiles) {
       process.exitValue()
     })
     exitFuture.onSuccess({
-      case (code: Int) => {
+      //  Normal exit condition
+      case (code: Int) if code == 0 =>
         log.info(s"Executor process exited with status code: $code")
-        if (code != 0){
-          Try(Source.fromFile(files.standardOutFile).mkString) match {
-            case Success(stdout) => log.error(s"Executor STDOUT:\n$stdout")
-            case _ => // NOOP
-          }
-          Try(Source.fromFile(files.standardErrorFile).mkString) match {
-            case Success(stderr) => log.error(s"Executor STDERR:\n$stderr")
-            case _ => // NOOP
-          }
+
+      //  Unexpected exit condition
+      case (code: Int) =>
+        log.warn(s"Executor process exited with status code: $code")
+        Try(Source.fromFile(files.lastStdoutFile).mkString) match {
+          case Success(stdout) => log.error(s"Executor STDOUT:\n$stdout")
+          case _ => // NOOP
         }
-      }
+        Try(Source.fromFile(files.standardErrorFile).mkString) match {
+          case Success(stderr) => log.error(s"Executor STDERR:\n$stderr")
+          case _ => // NOOP
+        }
     })
     exitFuture.onComplete({ _ =>
       //  Ensure the background threads are shutdown after the process exits

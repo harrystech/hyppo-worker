@@ -19,6 +19,9 @@ public final class ValidateIntegrationResult extends OperationResult {
     @JsonProperty("source")
     private final IngestionSource source;
 
+    @JsonProperty("valid")
+    private final boolean isValid;
+
     @JsonProperty("rawDataIntegration")
     private final boolean isRawDataIntegration;
 
@@ -30,13 +33,15 @@ public final class ValidateIntegrationResult extends OperationResult {
     @JsonCreator
     public ValidateIntegrationResult(
             @JsonProperty("source") final IngestionSource source,
+            @JsonProperty("valid")  final boolean isValid,
             @JsonProperty("rawDataIntegration") final boolean isRawDataIntegration,
             @JsonProperty("schema") final Schema schema
     ){
         super(OperationType.ValidateIntegration);
-        this.source = source;
+        this.source  = source;
+        this.isValid = isValid;
         this.isRawDataIntegration = isRawDataIntegration;
-        this.schema = schema;
+        this.schema  = schema;
     }
 
     public final IngestionSource getSource(){
@@ -45,6 +50,10 @@ public final class ValidateIntegrationResult extends OperationResult {
 
     public final Schema getSchema(){
         return this.schema;
+    }
+
+    public final boolean isValid(){
+        return this.isValid;
     }
 
     public final boolean isRawDataIntegration(){
