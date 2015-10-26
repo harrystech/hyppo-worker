@@ -27,14 +27,16 @@ public final class ExecutorCommandLoop {
 
     private final ObjectMapper mapper;
 
-    private DataIntegration<?> integration = null;
+    private final TaskSpecificLogging logging;
 
-    private int taskCount = 0;
+    private DataIntegration<?> integration;
+
 
     public ExecutorCommandLoop(final int serverPort, final String className){
         this.serverPort  = serverPort;
         this.className   = className;
         this.mapper      = new ObjectMapper();
+        this.logging     = new TaskSpecificLogging();
         this.integration = null;
     }
 
@@ -45,7 +47,7 @@ public final class ExecutorCommandLoop {
         while (true){
             try (final WorkerIPCSocket socket = this.connectToCommander()){
                 //  Rotate the log files so this task has a dedicated debugging output
-                this.rotateStdoutStream();
+                this.logging.rotateTaskLogFile();
                 //  Create the handler instance to facilitate this iteration, closes socket at the end
                 final CommanderSocketHandler handler = new CommanderSocketHandler(mapper, socket, this.integration);
                 final StartOperationCommand command  = handler.readCommand();
@@ -62,7 +64,7 @@ public final class ExecutorCommandLoop {
                 }
             } finally {
                 //  Ensure any buffered content in STDOUT is flushed before blocking to reconnect
-                System.out.flush();
+                this.logging.flushLogStream();
             }
         }
     }
@@ -76,15 +78,6 @@ public final class ExecutorCommandLoop {
             this.sendInitFailureIfPossible(e);
             throw e;
         }
-    }
-
-    private final void rotateStdoutStream() throws IOException {
-        taskCount++;
-        final File logFile = new File(String.format("../log/%5d.out", taskCount));
-        System.out.println("Rotating to next STDOUT file: " + logFile.getPath());
-        System.out.close();
-        System.setOut(new PrintStream(new FileOutputStream(logFile)));
-        System.out.println("Successfully rotated to new STDOUT file: " + logFile.getPath());
     }
 
     private final void sendFailureIfPossible(final WorkerIPCSocket socket, final Exception e){

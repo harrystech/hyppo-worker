@@ -2,6 +2,7 @@ package com.harrys.hyppo.worker
 
 import java.util.{Date, UUID}
 
+import com.harrys.hyppo.source.api.PersistingSemantics
 import com.harrys.hyppo.source.api.model.{DataIngestionTask, IngestionSource, DataIngestionJob}
 import com.harrys.hyppo.worker.api.code.{IntegrationDetails, IntegrationSchema, IntegrationCode, ExecutableIntegration}
 import com.typesafe.config.ConfigFactory
@@ -32,7 +33,7 @@ object TestObjects {
   def testProcessedDataIntegration(source: IngestionSource): ExecutableIntegration = {
     val schema = IntegrationSchema(new ProcessedDataStub().avroType().recordSchema())
     val code   = IntegrationCode(classOf[ProcessedDataStub].getCanonicalName, Seq())
-    ExecutableIntegration(source, schema, code, IntegrationDetails(isRawDataIntegration = false, 1))
+    ExecutableIntegration(source, schema, code, IntegrationDetails(isRawDataIntegration = false, persistingSemantics = PersistingSemantics.Default, 1))
   }
 
 }

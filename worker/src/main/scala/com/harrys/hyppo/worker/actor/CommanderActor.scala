@@ -187,7 +187,18 @@ final class CommanderActor
   def createWorkerResponse(input: WorkerInput, result: OperationResult) : Future[WorkerResponse] = result match {
     case validate:  ValidateIntegrationResult   =>
       val request  = input.asInstanceOf[ValidateIntegrationRequest]
-      val response = ValidateIntegrationResponse(request, validate.isRawDataIntegration, IntegrationSchema(validate.getSchema))
+      val errors   = JavaConversions.asScalaBuffer(validate.getValidationErrors).map(e => {
+        val trace  = Option(e.getException).map(new ExecutorException(_).toRemoteException)
+        ValidationErrorDetails(e.getMessage, trace)
+      })
+      val response = ValidateIntegrationResponse(
+        input   = request,
+        isValid = validate.isValid,
+        schema  = IntegrationSchema(validate.getSchema),
+        rawDataIntegration  = validate.isRawDataIntegration,
+        persistingSemantics = validate.getPersistingSemantics,
+        validationErrors = errors
+      )
       Future.successful(response)
     case create:    CreateIngestionTasksResult  => {
       val request  = input.asInstanceOf[CreateIngestionTasksRequest]

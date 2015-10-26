@@ -1,5 +1,6 @@
 package com.harrys.hyppo.worker.api.proto
 
+import com.harrys.hyppo.source.api.PersistingSemantics
 import com.harrys.hyppo.source.api.model.{DataIngestionTask, DataIngestionJob}
 import com.harrys.hyppo.worker.api.code.{IntegrationCode, ExecutableIntegration, IntegrationSchema, UnvalidatedIntegration}
 
@@ -33,11 +34,17 @@ final case class FailureResponse(override val input: WorkerInput, failure: Optio
 final case class ValidateIntegrationRequest(override val integration: UnvalidatedIntegration) extends GeneralWorkerInput
 
 @SerialVersionUID(1L)
+final case class ValidationErrorDetails(message: String, exception: Option[RemoteException])
+
+@SerialVersionUID(1L)
 final case class ValidateIntegrationResponse
 (
   override val input: ValidateIntegrationRequest,
+  isValid: Boolean,
+  schema: IntegrationSchema,
   rawDataIntegration: Boolean,
-  schema: IntegrationSchema
+  persistingSemantics: PersistingSemantics,
+  validationErrors: Seq[ValidationErrorDetails]
 ) extends WorkerResponse
 
 
