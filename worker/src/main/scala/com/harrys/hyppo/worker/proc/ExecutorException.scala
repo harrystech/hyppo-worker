@@ -1,7 +1,7 @@
 package com.harrys.hyppo.worker.proc
 
 import com.harrys.hyppo.executor.proto.ExecutorError
-import com.harrys.hyppo.worker.api.proto.{IntegrationStackFrame, IntegrationException}
+import com.harrys.hyppo.worker.api.proto.{IntegrationException, IntegrationStackFrame}
 
 import scala.collection.JavaConversions
 

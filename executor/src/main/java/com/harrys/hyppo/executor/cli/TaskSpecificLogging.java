@@ -1,6 +1,10 @@
 package com.harrys.hyppo.executor.cli;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.file.Path;
 
 /**
  * Created by jpetty on 10/26/15.
@@ -12,8 +16,10 @@ public final class TaskSpecificLogging {
     //  Initial log file does not exist
     private File currentLogFile = null;
 
-    public TaskSpecificLogging(){
+    private final Path logPath;
 
+    public TaskSpecificLogging(){
+        this.logPath = new File("").getAbsoluteFile().getParentFile().toPath().resolve("log");
     }
 
     public final File getCurrentLogFile(){
@@ -26,7 +32,13 @@ public final class TaskSpecificLogging {
 
     public final synchronized void rotateTaskLogFile() throws IOException {
         this.taskCounter++;
-        this.currentLogFile = new File(String.format("task-%5d", taskCounter));
+        if (!this.logPath.toFile().isDirectory() && !this.logPath.toFile().mkdirs()){
+            throw new IllegalStateException("Couldn't create log directory: " + this.logPath.toAbsolutePath().toString());
+        }
+        this.currentLogFile = logPath.resolve(String.format("task-%05d.out", taskCounter)).toFile();
+        if (!this.currentLogFile.createNewFile()){
+            throw new IllegalStateException("Failed to create new log output file: " + this.currentLogFile.getAbsolutePath());
+        }
         System.out.println("Rotating to new log file: " + this.currentLogFile.getPath());
         System.out.close();
         System.setOut(new PrintStream(new FileOutputStream(this.currentLogFile)));

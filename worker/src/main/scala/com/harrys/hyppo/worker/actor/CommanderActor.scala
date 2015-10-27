@@ -8,19 +8,19 @@ import akka.util.Timeout
 import com.github.sstone.amqp.Amqp.Ack
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.executor.cli.ExecutorMain
+import com.harrys.hyppo.executor.proto.StartOperationCommand
 import com.harrys.hyppo.executor.proto.com._
 import com.harrys.hyppo.executor.proto.res._
-import com.harrys.hyppo.executor.proto.{OperationResult, StartOperationCommand}
 import com.harrys.hyppo.source.api.model.{DataIngestionJob, DataIngestionTask}
 import com.harrys.hyppo.worker.actor.amqp.WorkQueueItem
 import com.harrys.hyppo.worker.api.code.{IntegrationCode, IntegrationSchema}
 import com.harrys.hyppo.worker.api.proto._
 import com.harrys.hyppo.worker.cache.LoadedJarFile
 import com.harrys.hyppo.worker.data.{DataHandler, TempFilePool}
-import com.harrys.hyppo.worker.proc.{CommandOutput, CommandExecutionException, ExecutorException, SimpleCommander}
+import com.harrys.hyppo.worker.proc.{CommandExecutionException, CommandOutput, ExecutorException, SimpleCommander}
 
 import scala.collection.JavaConversions
-import scala.concurrent.{TimeoutException, Await, Future}
+import scala.concurrent.{Await, Future, TimeoutException}
 import scala.io.Source
 import scala.util.{Failure, Success}
 
@@ -86,6 +86,9 @@ final class CommanderActor
       throw new Exception(detail)
 
     case item: WorkQueueItem =>
+      //  Counter-intuitively, here's where it's safest to purge old logs
+      simpleCommander.executor.files.cleanupLogs()
+
       val taskActor = sender()
 
       log.info(s"Starting work on Rabbit item ${ item.rabbitItem.printableDetails }")
@@ -133,7 +136,10 @@ final class CommanderActor
 
       case Failure(error) =>
         taskActor ! Ack(item.rabbitItem.deliveryTag)
-    }.mapTo[Unit]
+    }.map {
+      //  This is dumb, but to make scala happy- here's a Unit.
+      case _ => ()
+    }
   }
 
 
@@ -156,10 +162,9 @@ final class CommanderActor
             taskActor ! PersistProcessedDataResponse(persist, logFile, data)
           }
         }
-        future.onComplete {
+        future.andThen {
           case _ => tempFiles.cleanAll()
         }
-        future
       }
     }
 
@@ -247,11 +252,13 @@ final class CommanderActor
   def createLogUploadFuture(input: WorkerInput, taskLog: File) : Future[RemoteLogFile] = {
     val location = dataHandler.createRemoteLogFile(input, taskLog)
     //  This always succeeds, even when it doesn't because it should never prevent forward progress
-    dataHandler.uploadLogFile(location, taskLog).recover {
+    val uploadFuture = dataHandler.uploadLogFile(location, taskLog).recover {
       case e: Exception =>
         log.error(e, s"Failed to upload log file: ${location.toString}")
         location
     }
+    val timeout = akka.pattern.after(config.uploadLogTimeout, context.system.scheduler)(Future.successful(location))
+    Future.firstCompletedOf(Seq(uploadFuture, timeout))
   }
 
   def uploadLogSynchronously(input: WorkerInput, taskLog: File) : RemoteLogFile = {
@@ -262,7 +269,7 @@ final class CommanderActor
         location
     }
     try {
-      Await.result(upload, config.uploadDataTimeout)
+      Await.result(upload, config.uploadLogTimeout)
     } catch {
       case to: TimeoutException =>
         log.error(to, "Timed out waiting for log upload")

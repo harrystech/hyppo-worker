@@ -1,8 +1,8 @@
 package com.harrys.hyppo.worker.api.proto
 
 import com.harrys.hyppo.source.api.PersistingSemantics
-import com.harrys.hyppo.source.api.model.{IngestionSource, DataIngestionTask, DataIngestionJob}
-import com.harrys.hyppo.worker.api.code.{IntegrationCode, ExecutableIntegration, IntegrationSchema, UnvalidatedIntegration}
+import com.harrys.hyppo.source.api.model.{DataIngestionJob, DataIngestionTask, IngestionSource}
+import com.harrys.hyppo.worker.api.code.{ExecutableIntegration, IntegrationCode, IntegrationSchema, UnvalidatedIntegration}
 
 /**
  * Created by jpetty on 9/18/15.

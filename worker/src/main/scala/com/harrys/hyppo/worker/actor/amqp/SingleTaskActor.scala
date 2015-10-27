@@ -7,7 +7,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import com.github.sstone.amqp.Amqp._
 import com.harrys.hyppo.config.WorkerConfig
-import com.harrys.hyppo.worker.api.proto.{RemoteLogFile, RemoteRawDataFile, FailureResponse, WorkerResponse}
+import com.harrys.hyppo.worker.api.proto.{FailureResponse, RemoteLogFile, WorkerResponse}
 import com.rabbitmq.client.AMQP.BasicProperties
 
 /**

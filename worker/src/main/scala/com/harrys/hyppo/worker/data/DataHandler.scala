@@ -21,15 +21,15 @@ final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val 
   private val client = new AmazonS3Client(config.awsCredentialsProvider)
 
   def uploadLogFile(location: RemoteLogFile, logFile: File) : Future[RemoteLogFile] = {
-    if (config.uploadTaskLog){
+    if (!config.uploadTaskLog){
+      Future.successful(location)
+    } else {
       Future({
         blocking {
           client.putObject(location.bucket, location.key, logFile)
         }
         location
       })
-    } else {
-      Future.successful(location)
     }
   }
 

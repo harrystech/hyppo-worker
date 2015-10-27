@@ -5,7 +5,7 @@ import akka.pattern.gracefulStop
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.util.ConfigUtils
 import com.harrys.hyppo.worker.actor.WorkerFSM
-import com.harrys.hyppo.worker.actor.amqp.{RabbitWorkerDelegation, RabbitQueueStatusActor}
+import com.harrys.hyppo.worker.actor.amqp.{RabbitQueueStatusActor, RabbitWorkerDelegation}
 import com.typesafe.config.Config
 
 import scala.concurrent.Await

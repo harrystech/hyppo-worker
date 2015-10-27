@@ -24,7 +24,7 @@ final class ExecutorFiles(val base: Path) {
 
   def standardOutFiles: Seq[File] = {
     val files = JavaConversions.collectionAsScalaIterable(FileUtils.listFiles(logDirectory, Array("out"), true)).toSeq
-    files.sortBy(_.getName)
+    files.sortBy(_.getName).reverse
   }
 
   def lastTaskOutputFile: Option[File] = {
@@ -37,6 +37,13 @@ final class ExecutorFiles(val base: Path) {
 
   def workingDirectoryFiles : Seq[File] = {
     JavaConversions.collectionAsScalaIterable(FileUtils.listFiles(workingDirectory, null, true)).toSeq
+  }
+
+  def cleanupLogs() : Unit = {
+    val logFiles = this.standardOutFiles
+    if (logFiles.nonEmpty){
+      logFiles.tail.foreach(FileUtils.deleteQuietly)
+    }
   }
 
   def destroyAll() : Unit = {

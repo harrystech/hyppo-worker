@@ -29,6 +29,8 @@ final class WorkerConfig(config: Config) extends HyppoConfig(config) {
 
   val uploadTaskLog: Boolean = config.getBoolean("hyppo.worker.upload-task-log")
 
+  val uploadLogTimeout: FiniteDuration = Duration(config.getDuration("hyppo.worker.upload-log-timeout").toMillis, MILLISECONDS)
+
   def newExecutorSetup(): ExecutorSetup = defaultSetup.clone()
 
 }

@@ -11,10 +11,7 @@ import com.harrys.hyppo.source.api.ProcessedDataIntegration;
 import com.harrys.hyppo.source.api.RawDataIntegration;
 import org.codehaus.jackson.map.ObjectMapper;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
 
 /**
  * Created by jpetty on 7/21/15.
