@@ -38,7 +38,10 @@ public final class ExecutorCommandLoop {
     }
 
     public final void runUntilExitCommand() throws Exception {
+
+        //  Attempt initialization of the integration, bail if not usable
         this.initializeIntegration();
+
 
         //  Rotate on the first log immediately on the first pass
         this.logging.rotateTaskLogFile();
@@ -48,6 +51,7 @@ public final class ExecutorCommandLoop {
             try (final WorkerIPCSocket socket = this.connectToCommander()){
                 //  Rotate the log files so this task has a dedicated debugging output
                 this.logging.rotateTaskLogFile();
+
                 //  Create the handler instance to facilitate this iteration, closes socket at the end
                 final CommanderSocketHandler handler = new CommanderSocketHandler(mapper, socket, this.integration);
                 final StartOperationCommand command  = handler.readCommand();
