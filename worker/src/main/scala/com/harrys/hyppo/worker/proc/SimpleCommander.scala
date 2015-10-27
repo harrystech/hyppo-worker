@@ -100,7 +100,11 @@ final class SimpleCommander(val executor: LaunchedExecutor, server: ServerSocket
     override def run(): Unit = {
       try {
         while (executor.isAlive && deadline.hasTimeLeft()){
-          Thread.sleep(50L)
+          if (deadline.timeLeft.toMillis <= 50L){
+            Thread.`yield`()
+          } else {
+            Thread.sleep(50L)
+          }
         }
       } finally {
         if (executor.isAlive){

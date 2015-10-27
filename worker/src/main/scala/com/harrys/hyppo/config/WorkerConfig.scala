@@ -19,6 +19,12 @@ final class WorkerConfig(config: Config) extends HyppoConfig(config) {
     setup
   }
 
+  val workerCount: Int = config.getInt("hyppo.worker-count")
+
+  if (workerCount <= 0){
+    throw new IllegalArgumentException("Config value hyppo.worker-count must be > 0")
+  }
+
   val workAffinityTimeout: FiniteDuration = Duration(config.getDuration("hyppo.worker.work-affinity-timeout").toMillis, MILLISECONDS)
 
   val jarDownloadTimeout: FiniteDuration = Duration(config.getDuration("hyppo.worker.jar-download-timeout").toMillis, MILLISECONDS)

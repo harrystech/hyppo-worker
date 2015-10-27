@@ -8,7 +8,7 @@ import com.harrys.hyppo.worker.actor.WorkerFSM
 import com.harrys.hyppo.worker.actor.amqp.{RabbitQueueStatusActor, RabbitWorkerDelegation}
 import com.typesafe.config.Config
 
-import scala.concurrent.Await
+import scala.concurrent.{Future, Await}
 import scala.concurrent.duration._
 
 /**
@@ -18,12 +18,16 @@ final class HyppoWorker(val system: ActorSystem, config: Config) {
   val settings   = new WorkerConfig(config.resolve())
   val delegation = system.actorOf(Props(classOf[RabbitWorkerDelegation], settings), "delegation")
   val queueStats = system.actorOf(Props(classOf[RabbitQueueStatusActor], settings, delegation), "queue-stats")
-  val workerFSM  = system.actorOf(Props(classOf[WorkerFSM], settings, delegation), "worker")
+  val workerFSMs = (1 to settings.workerCount).inclusive.map(i => {
+    system.actorOf(Props(classOf[WorkerFSM], settings, delegation), "worker-%02d".format(i))
+  })
 
   system.registerOnTermination({
     delegation ! Lifecycle.ImpendingShutdown
     queueStats ! PoisonPill
-    Await.result(gracefulStop(workerFSM, Duration(6, SECONDS), Lifecycle.ImpendingShutdown), Duration(8, SECONDS))
+    val futures = workerFSMs.map(ref => gracefulStop(ref, Duration(6, SECONDS), Lifecycle.ImpendingShutdown))
+    implicit val ec = system.dispatcher
+    Await.result(Future.sequence(futures), Duration(8, SECONDS))
   })
 }
 
