@@ -4,7 +4,9 @@ import com.harrys.hyppo.executor.net.CommanderSocketHandler;
 import com.harrys.hyppo.executor.net.IPCMessageFrame;
 import com.harrys.hyppo.executor.net.WorkerIPCSocket;
 import com.harrys.hyppo.executor.proto.ExecutorError;
+import com.harrys.hyppo.executor.proto.ExecutorInitMessage;
 import com.harrys.hyppo.executor.proto.StartOperationCommand;
+import com.harrys.hyppo.executor.proto.init.ExecutorReady;
 import com.harrys.hyppo.executor.proto.init.InitializationFailed;
 import com.harrys.hyppo.source.api.DataIntegration;
 import com.harrys.hyppo.source.api.ProcessedDataIntegration;
@@ -32,35 +34,29 @@ public final class ExecutorCommandLoop {
     public ExecutorCommandLoop(final int serverPort, final String className){
         this.serverPort  = serverPort;
         this.className   = className;
-        this.mapper      = new ObjectMapper();
         this.logging     = new TaskSpecificLogging();
         this.integration = null;
+        this.mapper      = new ObjectMapper();
+        this.mapper.getSerializationConfig().addMixInAnnotations(ExecutorInitMessage.class, ExecutorInitMessage.class);
+        this.mapper.getDeserializationConfig().addMixInAnnotations(ExecutorInitMessage.class, ExecutorInitMessage.class);
     }
 
     public final void runUntilExitCommand() throws Exception {
-
-        //  Attempt initialization of the integration, bail if not usable
-        this.initializeIntegration();
-
-
-        //  Rotate on the first log immediately on the first pass
-        this.logging.rotateTaskLogFile();
-
-        foreverLoop:
         while (true){
             try (final WorkerIPCSocket socket = this.connectToCommander()){
                 //  Rotate the log files so this task has a dedicated debugging output
                 this.logging.rotateTaskLogFile();
-
                 //  Create the handler instance to facilitate this iteration, closes socket at the end
-                final CommanderSocketHandler handler = new CommanderSocketHandler(mapper, socket, this.integration);
-                final StartOperationCommand command  = handler.readCommand();
+                final StartOperationCommand command = readCommand(socket);
                 if (command.isExitCommand()){
                     socket.close();
-                    break foreverLoop;
+                    return;
                 } else {
                     try {
-                        handler.handleCommand(command);
+                        if (this.integration == null){
+                            this.initializeIntegration();
+                        }
+                        new CommanderSocketHandler(mapper, socket, this.integration).handleCommand(command);
                     } catch (Exception e){
                         this.logging.flushLogStream();
                         sendFailureIfPossible(socket, e);
@@ -74,7 +70,7 @@ public final class ExecutorCommandLoop {
         }
     }
 
-    public final synchronized void initializeIntegration() throws InvalidIntegrationClassException {
+    private final void initializeIntegration() throws InvalidIntegrationClassException {
         try {
             if (this.integration == null){
                 this.integration = createIntegrationInstance(this.className);
@@ -83,6 +79,16 @@ public final class ExecutorCommandLoop {
             this.sendInitFailureIfPossible(e);
             throw e;
         }
+    }
+
+    private final StartOperationCommand readCommand(final WorkerIPCSocket socket) throws Exception {
+        //  Send me work.
+        final byte[] content = this.mapper.writeValueAsBytes(new ExecutorReady());
+        final IPCMessageFrame ready = IPCMessageFrame.createFromContent(content);
+        socket.sendFrame(ready);
+        //  Wait for work to do
+        final IPCMessageFrame frame = socket.readFrame();
+        return this.mapper.readValue(frame.getContent(), StartOperationCommand.class);
     }
 
     private final void sendFailureIfPossible(final WorkerIPCSocket socket, final Exception e){

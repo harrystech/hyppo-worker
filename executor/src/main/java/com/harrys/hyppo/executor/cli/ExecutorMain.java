@@ -27,15 +27,6 @@ public final class ExecutorMain {
         final ExecutorCommandLoop looper = new ExecutorCommandLoop(commanderPort, integrationName);
 
         try {
-            looper.initializeIntegration();
-        } catch (Exception e){
-            System.err.println("Failure initializing integration instance: " + e.toString());
-            e.printStackTrace(System.err);
-            System.err.flush();
-            System.exit(1);
-        }
-
-        try {
             looper.runUntilExitCommand();
             //  This is put here to prevent non-daemon background threads from keeping the executor
             //  alive unnecessarily.
