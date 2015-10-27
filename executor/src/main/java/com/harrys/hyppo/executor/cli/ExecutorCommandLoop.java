@@ -53,9 +53,7 @@ public final class ExecutorCommandLoop {
                     return;
                 } else {
                     try {
-                        if (this.integration == null){
-                            this.initializeIntegration();
-                        }
+                        this.initializeIntegration();
                         final CommanderSocketHandler handler = new CommanderSocketHandler(mapper, socket, this.integration);
                         handler.handleCommand(command);
                     } catch (Exception e){
@@ -72,13 +70,13 @@ public final class ExecutorCommandLoop {
     }
 
     private final void initializeIntegration() throws InvalidIntegrationClassException {
-        try {
-            if (this.integration == null){
+        if (this.integration == null){
+            try {
                 this.integration = createIntegrationInstance(this.className);
+            } catch (InvalidIntegrationClassException e){
+                this.sendInitFailureIfPossible(e);
+                throw e;
             }
-        } catch (InvalidIntegrationClassException e){
-            this.sendInitFailureIfPossible(e);
-            throw e;
         }
     }
 
