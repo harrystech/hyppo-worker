@@ -7,7 +7,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import com.github.sstone.amqp.Amqp._
 import com.harrys.hyppo.config.WorkerConfig
-import com.harrys.hyppo.worker.api.proto.{FailureResponse, WorkerResponse}
+import com.harrys.hyppo.worker.api.proto.{FailureResponse, RemoteLogFile, WorkerResponse}
 import com.rabbitmq.client.AMQP.BasicProperties
 
 /**
@@ -38,7 +38,8 @@ final class SingleTaskActor(config: WorkerConfig, task: WorkQueueItem, commander
 
     case Terminated(dead) if dead.equals(commander) =>
       log.error(s"Unexpected termination of commander actor ${ commander }")
-      publishWorkResponse(FailureResponse(task.input, None))
+      val fakeLog = RemoteLogFile(config.dataBucketName, "")
+      publishWorkResponse(FailureResponse(task.input, fakeLog, None))
       context.stop(self)
   }
 

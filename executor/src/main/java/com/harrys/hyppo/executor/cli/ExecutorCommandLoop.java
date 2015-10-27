@@ -1,10 +1,12 @@
 package com.harrys.hyppo.executor.cli;
 
-import com.harrys.hyppo.executor.net.IPCMessageFrame;
-import com.harrys.hyppo.executor.proto.ExecutorError;
-import com.harrys.hyppo.executor.proto.StartOperationCommand;
 import com.harrys.hyppo.executor.net.CommanderSocketHandler;
+import com.harrys.hyppo.executor.net.IPCMessageFrame;
 import com.harrys.hyppo.executor.net.WorkerIPCSocket;
+import com.harrys.hyppo.executor.proto.ExecutorError;
+import com.harrys.hyppo.executor.proto.ExecutorInitMessage;
+import com.harrys.hyppo.executor.proto.StartOperationCommand;
+import com.harrys.hyppo.executor.proto.init.ExecutorReady;
 import com.harrys.hyppo.executor.proto.init.InitializationFailed;
 import com.harrys.hyppo.source.api.DataIntegration;
 import com.harrys.hyppo.source.api.ProcessedDataIntegration;
@@ -24,48 +26,68 @@ public final class ExecutorCommandLoop {
 
     private final ObjectMapper mapper;
 
-    private DataIntegration<?> integration = null;
+    private final TaskSpecificLogging logging;
+
+    private DataIntegration<?> integration;
+
 
     public ExecutorCommandLoop(final int serverPort, final String className){
         this.serverPort  = serverPort;
         this.className   = className;
-        this.mapper      = new ObjectMapper();
+        this.logging     = new TaskSpecificLogging();
         this.integration = null;
+        this.mapper      = new ObjectMapper();
+        this.mapper.getSerializationConfig().addMixInAnnotations(ExecutorInitMessage.class, ExecutorInitMessage.class);
+        this.mapper.getDeserializationConfig().addMixInAnnotations(ExecutorInitMessage.class, ExecutorInitMessage.class);
     }
 
     public final void runUntilExitCommand() throws Exception {
-        this.initializeIntegration();
-
-        foreverLoop:
         while (true){
             try (final WorkerIPCSocket socket = this.connectToCommander()){
+                //  Rotate the log files so this task has a dedicated debugging output
+                this.logging.rotateTaskLogFile();
                 //  Create the handler instance to facilitate this iteration, closes socket at the end
-                final CommanderSocketHandler handler = new CommanderSocketHandler(mapper, socket, this.integration);
-                final StartOperationCommand command  = handler.readCommand();
+                final StartOperationCommand command = readCommand(socket);
                 if (command.isExitCommand()){
                     socket.close();
-                    break foreverLoop;
+                    return;
                 } else {
                     try {
+                        this.initializeIntegration();
+                        final CommanderSocketHandler handler = new CommanderSocketHandler(mapper, socket, this.integration);
                         handler.handleCommand(command);
                     } catch (Exception e){
+                        this.logging.flushLogStream();
                         sendFailureIfPossible(socket, e);
                         throw e;
                     }
                 }
+            } finally {
+                //  Ensure any buffered content in STDOUT is flushed before blocking to reconnect
+                this.logging.flushLogStream();
             }
         }
     }
 
-    public final synchronized void initializeIntegration() throws Exception {
-        try {
-            if (this.integration == null){
+    private final void initializeIntegration() throws InvalidIntegrationClassException {
+        if (this.integration == null){
+            try {
                 this.integration = createIntegrationInstance(this.className);
+            } catch (InvalidIntegrationClassException e){
+                this.sendInitFailureIfPossible(e);
+                throw e;
             }
-        } catch (Exception e){
-            this.sendInitFailureIfPossible(e);
-            throw e;
         }
+    }
+
+    private final StartOperationCommand readCommand(final WorkerIPCSocket socket) throws Exception {
+        //  Send me work.
+        final byte[] content = this.mapper.writeValueAsBytes(new ExecutorReady());
+        final IPCMessageFrame ready = IPCMessageFrame.createFromContent(content);
+        socket.sendFrame(ready);
+        //  Wait for work to do
+        final IPCMessageFrame frame = socket.readFrame();
+        return this.mapper.readValue(frame.getContent(), StartOperationCommand.class);
     }
 
     private final void sendFailureIfPossible(final WorkerIPCSocket socket, final Exception e){
@@ -98,8 +120,13 @@ public final class ExecutorCommandLoop {
     }
 
     @SuppressWarnings("unchecked")
-    public static final DataIntegration<?> createIntegrationInstance(final String className) throws ClassNotFoundException, InvalidIntegrationClassException {
-        final Class<?> initialClass = Class.forName(className);
+    public static final DataIntegration<?> createIntegrationInstance(final String className) throws InvalidIntegrationClassException {
+        final Class<?> initialClass;
+        try {
+            initialClass = Class.forName(className);
+        } catch (ClassNotFoundException cnf){
+            throw new InvalidIntegrationClassException("No class exists with name: " + className, cnf);
+        }
 
         final Class<? extends DataIntegration<?>> castClass;
         if (DataIntegration.class.isAssignableFrom(initialClass)) {

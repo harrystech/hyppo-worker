@@ -24,14 +24,6 @@ public final class CommanderSocketHandler {
         this.socket      = socket;
         this.integration = integration;
         this.mapper      = mapper;
-        this.mapper.getSerializationConfig().addMixInAnnotations(ExecutorInitMessage.class, ExecutorInitMessage.class);
-        this.mapper.getDeserializationConfig().addMixInAnnotations(ExecutorInitMessage.class, ExecutorInitMessage.class);
-    }
-
-    public final StartOperationCommand readCommand() throws Exception {
-        this.sendJsonMessage(new ExecutorReady());
-        final IPCMessageFrame frame = this.socket.readFrame();
-        return this.mapper.readValue(frame.getContent(), StartOperationCommand.class);
     }
 
     public final void handleCommand(final StartOperationCommand command) throws Exception {

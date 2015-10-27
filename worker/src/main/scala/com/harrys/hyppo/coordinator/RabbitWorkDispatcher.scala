@@ -5,7 +5,7 @@ import javax.inject.{Inject, Singleton}
 import akka.actor.{ActorSystem, Props}
 import akka.pattern.gracefulStop
 import com.harrys.hyppo.config.CoordinatorConfig
-import com.harrys.hyppo.worker.actor.amqp.{RabbitWorkQueueProxy, QueueStatusInfo}
+import com.harrys.hyppo.worker.actor.amqp.{QueueStatusInfo, RabbitWorkQueueProxy}
 import com.harrys.hyppo.worker.api.proto.WorkerInput
 
 import scala.concurrent.Await

@@ -1,21 +1,27 @@
 package com.harrys.hyppo.worker.proc
 
 import com.harrys.hyppo.executor.proto.ExecutorError
-import com.harrys.hyppo.worker.api.proto.RemoteException
+import com.harrys.hyppo.worker.api.proto.{IntegrationException, IntegrationStackFrame}
 
 import scala.collection.JavaConversions
 
 /**
- * Created by jpetty on 9/9/15.
+ * This class represents an exception thrown inside of the executor that has now propagated back to the worker
  */
-final class ExecutorException(val executorError: ExecutorError) extends Exception {
+final class ExecutorException(val executorError: ExecutorError) extends Exception(executorError.getMessage) {
 
-  def toRemoteException: RemoteException = {
-    def internalRemoteMapping(error: ExecutorError) : RemoteException = {
-      val cause = Option(error.getCause).map(internalRemoteMapping)
-      val trace = JavaConversions.asScalaBuffer(error.getStackTrace).map(_.toStackTraceElement.toString)
-      RemoteException(error.getExceptionType, error.getMessage, trace, cause)
-    }
-    internalRemoteMapping(executorError)
+  def toIntegrationException: IntegrationException = {
+    ExecutorException.createIntegrationException(executorError)
+  }
+}
+
+object ExecutorException {
+
+  def createIntegrationException(error: ExecutorError) : IntegrationException = {
+    val nextCause  = Option(error.getCause).map(createIntegrationException)
+    val stackTrace = JavaConversions.asScalaBuffer(error.getStackTrace).map(e => {
+      IntegrationStackFrame(e.getClassName, e.getMethodName, e.getFileName, e.getLineNumber)
+    })
+    IntegrationException(error.getExceptionType, error.getMessage, stackTrace, nextCause)
   }
 }

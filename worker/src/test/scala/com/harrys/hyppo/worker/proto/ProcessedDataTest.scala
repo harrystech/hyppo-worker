@@ -17,7 +17,7 @@ class ProcessedDataTest extends ExecutorCommandTest {
   "Processed Data Integrations must" must {
     val testTask = TestObjects.testIngestionTask
 
-    val fetchObject = commander.executeCommand(new FetchProcessedDataCommand(testTask))
+    val fetchObject = commander.executeCommand(new FetchProcessedDataCommand(testTask)).result
 
     "produce the correct result fetching type" in {
       fetchObject shouldBe a [FetchProcessedDataResult]
@@ -39,7 +39,7 @@ class ProcessedDataTest extends ExecutorCommandTest {
       values.head.getName shouldNot be (null)
     }
 
-    val persistObject = commander.executeCommand(new PersistProcessedDataCommand(testTask, fetch.getLocalDataFile))
+    val persistObject = commander.executeCommand(new PersistProcessedDataCommand(testTask, fetch.getLocalDataFile)).result
 
     "then produce the right persisting type" in {
       persistObject shouldBe a [PersistProcessedDataResult]

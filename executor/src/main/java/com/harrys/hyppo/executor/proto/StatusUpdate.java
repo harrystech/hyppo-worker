@@ -2,9 +2,9 @@ package com.harrys.hyppo.executor.proto;
 
 import com.harrys.hyppo.executor.OperationType;
 import com.harrys.hyppo.executor.proto.stat.FetchProcessedDataUpdate;
+import com.harrys.hyppo.executor.proto.stat.FetchRawDataUpdate;
 import com.harrys.hyppo.executor.proto.stat.PersistProcessedDataUpdate;
 import com.harrys.hyppo.executor.proto.stat.ProcessRawDataUpdate;
-import com.harrys.hyppo.executor.proto.stat.FetchRawDataUpdate;
 import org.codehaus.jackson.annotate.JsonIgnoreProperties;
 import org.codehaus.jackson.annotate.JsonProperty;
 import org.codehaus.jackson.annotate.JsonSubTypes;

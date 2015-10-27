@@ -8,8 +8,8 @@ import com.harrys.hyppo.source.api.ValidationResult;
 import com.harrys.hyppo.source.api.model.DataIngestionJob;
 import com.harrys.hyppo.source.api.model.DataIngestionTask;
 import com.harrys.hyppo.source.api.model.IngestionSource;
-import com.harrys.hyppo.source.api.task.CreateTasksForJob;
-import com.harrys.hyppo.source.api.task.TaskCreator;
+import com.harrys.hyppo.source.api.task.CreateIngestionTasks;
+import com.harrys.hyppo.source.api.task.IngestionTaskCreator;
 import org.apache.avro.specific.SpecificRecord;
 import org.codehaus.jackson.map.ObjectMapper;
 
@@ -43,13 +43,13 @@ public final class CreateIngestionTasksOperation extends ExecutorOperation<Creat
             throw sourceValidation.combineWith(jobValidation).toValidationException();
         }
 
-        final TaskCreator creator = integration.newIngestionTaskCreator();
+        final IngestionTaskCreator creator = integration.newIngestionTaskCreator();
         if (creator == null){
-            throw new IllegalArgumentException(String.format("Data Integration '%s' instance created null value for '%s'", this.getIntegrationClass().getName(), TaskCreator.class.getName()));
+            throw new IllegalArgumentException(String.format("Data Integration '%s' instance created null value for '%s'", this.getIntegrationClass().getName(), IngestionTaskCreator.class.getName()));
         }
 
-        final CreateTasksForJob integrationOperation = new CreateTasksForJob(this.getJob());
-        creator.createTasks(integrationOperation);
+        final CreateIngestionTasks integrationOperation = new CreateIngestionTasks(this.getJob());
+        creator.createIngestionTasks(integrationOperation);
 
         //  TODO: Validate results are sane
         final List<DataIngestionTask> createdTasks = integrationOperation.getTaskBuilder().build();

@@ -6,7 +6,7 @@ import akka.testkit.{TestActorRef, TestProbe}
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.{TestObjects, TestConfig}
 import com.harrys.hyppo.worker.actor.{RequestForPreferredWork, RequestForAnyWork}
-import com.harrys.hyppo.worker.api.proto.{CreateIngestionTasksRequest, FailureResponse}
+import com.harrys.hyppo.worker.api.proto.{RemoteLogFile, RemoteRawDataFile, CreateIngestionTasksRequest, FailureResponse}
 
 import scala.util.Try
 
@@ -56,7 +56,7 @@ class WorkerDelegatorActorTests extends RabbitMQTests  {
         val reply = probe.expectMsgType[WorkQueueItem]
         reply.input shouldBe a[CreateIngestionTasksRequest]
 
-        probe.reply(FailureResponse(work, None))
+        probe.reply(FailureResponse(work, RemoteLogFile("", ""), None))
 
         reply.input.code.isSameCode(integration.code) shouldBe true
 

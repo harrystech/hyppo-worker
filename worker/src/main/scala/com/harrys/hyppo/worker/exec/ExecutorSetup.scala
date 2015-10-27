@@ -64,7 +64,7 @@ final class ExecutorSetup() {
     val builder   = new ProcessBuilder()
       .directory(execFiles.workingDirectory)
       .redirectError(execFiles.standardErrorFile)
-      .redirectOutput(execFiles.standardOutFile)
+      .redirectOutput(execFiles.initialStdOutFile)
       .command(this.toCommand(commanderPort, integrationClass):_*)
     //  Last chance to inject system values before launch
     environment += ("JAVA_HOME" -> javaHome.getAbsolutePath)

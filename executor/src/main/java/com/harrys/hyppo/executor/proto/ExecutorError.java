@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * Created by jpetty on 9/9/15.
  */
-final public class ExecutorError implements Serializable {
+public final class ExecutorError implements Serializable {
     private static final long serialVersionUID = 1L;
 
     @JsonProperty("exceptionType")

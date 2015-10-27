@@ -46,7 +46,7 @@ class RawDataStub extends RawDataIntegration[TestRecord] {
     }
   }
 
-  override def newDataPersister(): ProcessedDataPersister[TestRecord] = new ProcessedDataPersister[TestRecord] {
+  override def newProcessedDataPersister(): ProcessedDataPersister[TestRecord] = new ProcessedDataPersister[TestRecord] {
     override def persistProcessedData(operation: PersistProcessedData[TestRecord]): Unit = {
       JavaConversions.asScalaIterator(operation.openReader()).foreach(record => {
         log.info(s"Found record: ${record.getName}")
@@ -54,8 +54,8 @@ class RawDataStub extends RawDataIntegration[TestRecord] {
     }
   }
 
-  override def newIngestionTaskCreator(): TaskCreator = new TaskCreator {
-    override def createTasks(operation: CreateTasksForJob): Unit = {
+  override def newIngestionTaskCreator(): IngestionTaskCreator = new IngestionTaskCreator {
+    override def createIngestionTasks(operation: CreateIngestionTasks): Unit = {
       operation.createTaskWithArgs(JavaConversions.mapAsJavaMap(Map[String, AnyRef]()))
     }
   }

@@ -5,9 +5,9 @@ import javax.inject.{Inject, Singleton}
 import akka.actor._
 import akka.pattern.gracefulStop
 import com.harrys.hyppo.config.CoordinatorConfig
-import com.harrys.hyppo.coordinator.{WorkResponseHandler, WorkDispatcher}
+import com.harrys.hyppo.coordinator.{WorkDispatcher, WorkResponseHandler}
 import com.harrys.hyppo.util.ConfigUtils
-import com.harrys.hyppo.worker.actor.amqp.{RabbitResponseQueueConsumer, QueueStatusInfo}
+import com.harrys.hyppo.worker.actor.amqp.{QueueStatusInfo, RabbitResponseQueueConsumer}
 import com.harrys.hyppo.worker.api.proto.WorkerInput
 import com.typesafe.config.Config
 

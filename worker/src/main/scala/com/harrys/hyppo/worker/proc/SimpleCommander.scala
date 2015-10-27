@@ -19,17 +19,22 @@ import scala.concurrent.duration.{Deadline, FiniteDuration}
 final class SimpleCommander(val executor: LaunchedExecutor, server: ServerSocket) {
   private val log = Logger(LoggerFactory.getLogger(this.getClass))
 
-  def executeCommand(command: StartOperationCommand) : OperationResult = {
+  def executeCommand(command: StartOperationCommand) : CommandOutput = {
     val updater = (_: StatusUpdate) => {}
     executeCommand(command, updater)
   }
 
-  @throws[ExecutionException]("if the executor politely announces an internal failure")
-  def executeCommand(command: StartOperationCommand, update: (StatusUpdate) => Unit) : OperationResult = {
+  @throws[CommandExecutionException]("if the task fails to run successfully")
+  def executeCommand(command: StartOperationCommand, update: (StatusUpdate) => Unit) : CommandOutput = {
     val handler = new OperationHandler(this.waitForNextConnection())
     try {
       handler.sendCommand(command)
-      consumeForResult(handler, update)
+      val result = consumeForResult(handler, update)
+      CommandOutput(result, executor.files.lastStdoutFile)
+    } catch {
+      case e: ExecutorException =>
+        val lastLogFile = executor.files.lastStdoutFile
+        throw new CommandExecutionException(command, e.toIntegrationException, lastLogFile)
     } finally {
       handler.close()
     }
@@ -95,7 +100,11 @@ final class SimpleCommander(val executor: LaunchedExecutor, server: ServerSocket
     override def run(): Unit = {
       try {
         while (executor.isAlive && deadline.hasTimeLeft()){
-          Thread.sleep(50L)
+          if (deadline.timeLeft.toMillis <= 50L){
+            Thread.`yield`()
+          } else {
+            Thread.sleep(50L)
+          }
         }
       } finally {
         if (executor.isAlive){
