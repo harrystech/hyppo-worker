@@ -43,6 +43,9 @@ public final class ExecutorCommandLoop {
     public final void runUntilExitCommand() throws Exception {
         this.initializeIntegration();
 
+        //  Rotate on the first log immediately on the first pass
+        this.logging.rotateTaskLogFile();
+
         foreverLoop:
         while (true){
             try (final WorkerIPCSocket socket = this.connectToCommander()){
@@ -58,6 +61,7 @@ public final class ExecutorCommandLoop {
                     try {
                         handler.handleCommand(command);
                     } catch (Exception e){
+                        this.logging.flushLogStream();
                         sendFailureIfPossible(socket, e);
                         throw e;
                     }

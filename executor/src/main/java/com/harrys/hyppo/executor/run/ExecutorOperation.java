@@ -86,6 +86,7 @@ public abstract class ExecutorOperation<C extends StartOperationCommand, R exten
     public final void execute() throws Exception {
         //  TODO: Implement exception handler / validation wrapping etc
         final R results = this.executeForResults();
+        System.out.flush();
         this.sendOperationResult(results);
     }
 
