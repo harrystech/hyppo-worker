@@ -1,7 +1,7 @@
 package com.harrys.hyppo.executor.run;
 
 import com.harrys.hyppo.executor.net.WorkerIPCSocket;
-import com.harrys.hyppo.executor.proto.ValidationDetail;
+import com.harrys.hyppo.executor.proto.ValidationErrorDetail;
 import com.harrys.hyppo.executor.proto.com.ValidateIntegrationCommand;
 import com.harrys.hyppo.executor.proto.res.ValidateIntegrationResult;
 import com.harrys.hyppo.source.api.*;
@@ -38,7 +38,7 @@ public final class ValidateIntegrationOperation extends ExecutorOperation<Valida
         final DataIntegration<? extends SpecificRecord> integration = this.getIntegration();
 
         //  Combined output of errors
-        final List<ValidationDetail> errors = new ArrayList<>();
+        final List<ValidationErrorDetail> errors = new ArrayList<>();
 
         boolean isRawData = this.isRawDataIntegration();
         Schema avroSchema = null;
@@ -50,41 +50,41 @@ public final class ValidateIntegrationOperation extends ExecutorOperation<Valida
             final ValidationResult sourceErrors = integration.validateSourceConfiguration(this.getSource());
             errors.addAll(toValidationElements(sourceErrors.getErrors()));
         } catch (Exception e){
-            errors.add(ValidationDetail.forException("Failed to validate source configuration", e));
+            errors.add(ValidationErrorDetail.forException("Failed to validate source configuration", e));
         }
 
         //  Validate that the avro schema is valid
         try {
             avroSchema = integration.avroType().recordSchema();
             if (avroSchema == null){
-                errors.add(new ValidationDetail("Integration returned null avro schema", null));
+                errors.add(new ValidationErrorDetail("Integration returned null avro schema", null));
             }
         } catch (Exception e){
-            errors.add(ValidationDetail.forException("Couldn't determine the avro schema", e));
+            errors.add(ValidationErrorDetail.forException("Couldn't determine the avro schema", e));
         }
 
         //  Validate that a task creator can be successfully created
         try {
             if (integration.newIngestionTaskCreator() == null){
-                errors.add(new ValidationDetail("Integration returned null TaskCreator instance", null));
+                errors.add(new ValidationErrorDetail("Integration returned null TaskCreator instance", null));
             }
         } catch (Exception e){
-            errors.add(ValidationDetail.forException("Failed to instantiate a TaskCreator", e));
+            errors.add(ValidationErrorDetail.forException("Failed to instantiate a TaskCreator", e));
         }
 
         //  Validate the persister exists and fetch the persisting semantics
         try {
             final ProcessedDataPersister<? extends SpecificRecord> persister = integration.newProcessedDataPersister();
             if (persister == null){
-                errors.add(new ValidationDetail("Integration returned null " + ProcessedDataPersister.class.getName(), null));
+                errors.add(new ValidationErrorDetail("Integration returned null " + ProcessedDataPersister.class.getName(), null));
             } else {
                 persistingSemantics = persister.semantics();
                 if (persistingSemantics == null){
-                    errors.add(new ValidationDetail(persister.getClass().getName() + " returned null " + PersistingSemantics.class.getName() + "value", null));
+                    errors.add(new ValidationErrorDetail(persister.getClass().getName() + " returned null " + PersistingSemantics.class.getName() + "value", null));
                 }
             }
         } catch (Exception e){
-            errors.add(ValidationDetail.forException("Integration failed to provide a valid " + ProcessedDataPersister.class.getName(), e));
+            errors.add(ValidationErrorDetail.forException("Integration failed to provide a valid " + ProcessedDataPersister.class.getName(), e));
         }
 
 
@@ -101,45 +101,45 @@ public final class ValidateIntegrationOperation extends ExecutorOperation<Valida
 
     private final void validateProcessedDataIntegration(
             final ProcessedDataIntegration<? extends SpecificRecord> integration,
-            final List<ValidationDetail> errors) throws Exception {
+            final List<ValidationErrorDetail> errors) throws Exception {
 
         //  Validate the processed data fetcher is valid
         try {
             final ProcessedDataFetcher<? extends SpecificRecord> fetcher = integration.newProcessedDataFetcher();
             if (fetcher == null){
-                errors.add(new ValidationDetail("Integration returned null " + ProcessedDataFetcher.class.getName(), null));
+                errors.add(new ValidationErrorDetail("Integration returned null " + ProcessedDataFetcher.class.getName(), null));
             }
         } catch (Exception e){
-            errors.add(ValidationDetail.forException("Integration failed to create new " + ProcessedDataFetcher.class.getName(), e));
+            errors.add(ValidationErrorDetail.forException("Integration failed to create new " + ProcessedDataFetcher.class.getName(), e));
         }
     }
 
     private final void validateRawDataIntegration(
             final RawDataIntegration<? extends SpecificRecord> integration,
-            final List<ValidationDetail> errors) throws Exception {
+            final List<ValidationErrorDetail> errors) throws Exception {
 
         //  Validate the raw data fetcher
         try {
             final RawDataFetcher fetcher = integration.newRawDataFetcher();
             if (fetcher == null){
-                errors.add(new ValidationDetail("Integration returned null " + RawDataFetcher.class.getName(), null));
+                errors.add(new ValidationErrorDetail("Integration returned null " + RawDataFetcher.class.getName(), null));
             }
         } catch (Exception e){
-            errors.add(ValidationDetail.forException("Integration failed to create new " + RawDataFetcher.class.getName(), e));
+            errors.add(ValidationErrorDetail.forException("Integration failed to create new " + RawDataFetcher.class.getName(), e));
         }
 
         //  Validate the raw data processor
         try {
             final RawDataProcessor<? extends SpecificRecord> processor = integration.newRawDataProcessor();
             if (processor == null){
-                errors.add(new ValidationDetail("Integration returned null " + RawDataProcessor.class.getName(), null));
+                errors.add(new ValidationErrorDetail("Integration returned null " + RawDataProcessor.class.getName(), null));
             }
         } catch (Exception e){
-            errors.add(ValidationDetail.forException("Integration failed to create new " + RawDataProcessor.class.getName(), e));
+            errors.add(ValidationErrorDetail.forException("Integration failed to create new " + RawDataProcessor.class.getName(), e));
         }
     }
 
-    private static final List<ValidationDetail> toValidationElements(final String[] messages){
+    private static final List<ValidationErrorDetail> toValidationElements(final String[] messages){
         if (messages.length == 0){
             return Collections.emptyList();
         } else {
@@ -147,7 +147,7 @@ public final class ValidateIntegrationOperation extends ExecutorOperation<Valida
         }
     }
 
-    private static final List<ValidationDetail> toValidationElements(final List<String> messages){
-        return messages.stream().map((message) -> new ValidationDetail(message, null)).collect(Collectors.toList());
+    private static final List<ValidationErrorDetail> toValidationElements(final List<String> messages){
+        return messages.stream().map((message) -> new ValidationErrorDetail(message, null)).collect(Collectors.toList());
     }
 }

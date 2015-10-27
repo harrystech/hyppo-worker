@@ -1,11 +1,12 @@
 package com.harrys.hyppo.executor.proto;
 
+import org.codehaus.jackson.annotate.JsonIgnore;
 import org.codehaus.jackson.annotate.JsonProperty;
 
 /**
  * Created by jpetty on 10/26/15.
  */
-public final class ValidationDetail {
+public final class ValidationErrorDetail {
 
     @JsonProperty("message")
     private final String message;
@@ -13,7 +14,7 @@ public final class ValidationDetail {
     @JsonProperty("exception")
     private final ExecutorError exception;
 
-    public ValidationDetail(
+    public ValidationErrorDetail(
             @JsonProperty("message") final String message,
             @JsonProperty("exception") final ExecutorError exception
     ){
@@ -29,7 +30,12 @@ public final class ValidationDetail {
         return exception;
     }
 
-    public static final ValidationDetail forException(final String message, final Exception e){
-        return new ValidationDetail(message, ExecutorError.createFromThrowable(e));
+    @JsonIgnore
+    public final boolean hasException(){
+        return (exception != null);
+    }
+
+    public static final ValidationErrorDetail forException(final String message, final Exception e){
+        return new ValidationErrorDetail(message, ExecutorError.createFromThrowable(e));
     }
 }

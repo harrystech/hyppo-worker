@@ -24,7 +24,7 @@ sealed trait WorkerResponse extends Product with Serializable {
 }
 
 @SerialVersionUID(1L)
-final case class FailureResponse(override val input: WorkerInput, failure: Option[RemoteException]) extends WorkerResponse
+final case class FailureResponse(override val input: WorkerInput, failure: Option[IntegrationException]) extends WorkerResponse
 
 //
 //
@@ -34,7 +34,7 @@ final case class FailureResponse(override val input: WorkerInput, failure: Optio
 final case class ValidateIntegrationRequest(override val integration: UnvalidatedIntegration) extends GeneralWorkerInput
 
 @SerialVersionUID(1L)
-final case class ValidationErrorDetails(message: String, exception: Option[RemoteException])
+final case class ValidationErrorDetails(message: String, exception: Option[IntegrationException])
 
 @SerialVersionUID(1L)
 final case class ValidateIntegrationResponse

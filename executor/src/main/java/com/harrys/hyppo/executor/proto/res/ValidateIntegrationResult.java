@@ -2,7 +2,7 @@ package com.harrys.hyppo.executor.proto.res;
 
 import com.harrys.hyppo.executor.OperationType;
 import com.harrys.hyppo.executor.proto.OperationResult;
-import com.harrys.hyppo.executor.proto.ValidationDetail;
+import com.harrys.hyppo.executor.proto.ValidationErrorDetail;
 import com.harrys.hyppo.executor.util.SchemaToJson;
 import com.harrys.hyppo.source.api.PersistingSemantics;
 import com.harrys.hyppo.source.api.model.IngestionSource;
@@ -38,7 +38,7 @@ public final class ValidateIntegrationResult extends OperationResult {
     private final Schema schema;
 
     @JsonProperty("validationErrors")
-    private final List<ValidationDetail> validationErrors;
+    private final List<ValidationErrorDetail> validationErrors;
 
     @JsonCreator
     public ValidateIntegrationResult(
@@ -46,7 +46,7 @@ public final class ValidateIntegrationResult extends OperationResult {
             @JsonProperty("persistingSemantics") final PersistingSemantics persistingSemantics,
             @JsonProperty("rawDataIntegration") final boolean isRawDataIntegration,
             @JsonProperty("schema") final Schema schema,
-            @JsonProperty("validationErrors") final List<ValidationDetail> validationErrors
+            @JsonProperty("validationErrors") final List<ValidationErrorDetail> validationErrors
     ){
         super(OperationType.ValidateIntegration);
         this.source  = source;
@@ -77,7 +77,7 @@ public final class ValidateIntegrationResult extends OperationResult {
         return this.isRawDataIntegration;
     }
 
-    public List<ValidationDetail> getValidationErrors() {
+    public List<ValidationErrorDetail> getValidationErrors() {
         return validationErrors;
     }
 }

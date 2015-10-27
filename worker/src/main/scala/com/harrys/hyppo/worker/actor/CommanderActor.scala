@@ -79,7 +79,7 @@ final class CommanderActor
       taskActor ! PoisonPill
 
     case CommandFailure(taskActor, response) =>
-      val detail = response.failure.map(_.detailString).getOrElse("Unknown error")
+      val detail = response.failure.map(_.summary).getOrElse("Unknown error")
       log.error(s"Restarting executor due to internal failure: ${ detail }")
       taskActor ! response
       taskActor ! PoisonPill
@@ -104,10 +104,10 @@ final class CommanderActor
         } catch {
           case e: ExecutorException =>
             log.error(e, "Failure inside of executor")
-            self ! CommandFailure(taskActor, FailureResponse(item.input, Some(e.toRemoteException)))
+            self ! CommandFailure(taskActor, FailureResponse(item.input, Some(e.toIntegrationException)))
           case e: Exception =>
             log.error(e, "Failure executing executor command")
-            self ! CommandFailure(taskActor, FailureResponse(item.input, Some(RemoteException.createFromThrowable(e))))
+            self ! CommandFailure(taskActor, FailureResponse(item.input, Some(IntegrationException.fromThrowable(e))))
         } finally {
           tempFiles.cleanAll()
         }
@@ -188,7 +188,7 @@ final class CommanderActor
     case validate:  ValidateIntegrationResult   =>
       val request  = input.asInstanceOf[ValidateIntegrationRequest]
       val errors   = JavaConversions.asScalaBuffer(validate.getValidationErrors).map(e => {
-        val trace  = Option(e.getException).map(new ExecutorException(_).toRemoteException)
+        val trace  = Option(e.getException).map(ExecutorException.createIntegrationException)
         ValidationErrorDetails(e.getMessage, trace)
       })
       val response = ValidateIntegrationResponse(
