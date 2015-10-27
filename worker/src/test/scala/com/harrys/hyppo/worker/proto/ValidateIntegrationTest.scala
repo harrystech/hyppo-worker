@@ -15,7 +15,7 @@ class ValidateIntegrationTest extends ExecutorCommandTest {
   override def integrationClass = classOf[RawDataStub]
 
   "The validate integration test" must {
-    val validateResult = commander.executeCommand(new ValidateIntegrationCommand(TestObjects.testIngestionSource()))
+    val validateResult = commander.executeCommand(new ValidateIntegrationCommand(TestObjects.testIngestionSource())).result
 
     "produce a result of the correct type" in {
       validateResult shouldBe a [ValidateIntegrationResult]

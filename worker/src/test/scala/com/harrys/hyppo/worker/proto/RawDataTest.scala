@@ -16,7 +16,7 @@ class RawDataTest extends ExecutorCommandTest {
   "Raw Data Integrations" must {
     val testTask = TestObjects.testIngestionTask()
 
-    val fetchResult = commander.executeCommand(new FetchRawDataCommand(testTask))
+    val fetchResult = commander.executeCommand(new FetchRawDataCommand(testTask)).result
     "produce a correct result type" in {
       fetchResult shouldBe a [FetchRawDataResult]
     }
@@ -27,7 +27,7 @@ class RawDataTest extends ExecutorCommandTest {
       rawFetch.getTask.getTaskNumber shouldEqual testTask.getTaskNumber
     }
 
-    val processResult = commander.executeCommand(new ProcessRawDataCommand(testTask, rawFetch.getRawDataFiles))
+    val processResult = commander.executeCommand(new ProcessRawDataCommand(testTask, rawFetch.getRawDataFiles)).result
     "then produce the correct processing tyep" in {
       processResult shouldBe a [ProcessRawDataResult]
     }
@@ -38,7 +38,7 @@ class RawDataTest extends ExecutorCommandTest {
       process.getLocalDataFile should exist
     }
 
-    val persistResult = commander.executeCommand(new PersistProcessedDataCommand(testTask, process.getLocalDataFile))
+    val persistResult = commander.executeCommand(new PersistProcessedDataCommand(testTask, process.getLocalDataFile)).result
 
     "then produce a correct persisting type" in {
       persistResult shouldBe a [PersistProcessedDataResult]

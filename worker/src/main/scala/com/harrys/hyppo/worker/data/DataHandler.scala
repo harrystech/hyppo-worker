@@ -1,11 +1,12 @@
 package com.harrys.hyppo.worker.data
 
 import java.io.File
+import java.util.UUID
 
 import com.amazonaws.services.s3.AmazonS3Client
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.source.api.model.DataIngestionTask
-import com.harrys.hyppo.worker.api.proto.{RemoteDataFile, RemoteProcessedDataFile, RemoteRawDataFile}
+import com.harrys.hyppo.worker.api.proto._
 import org.apache.commons.io.{FileUtils, FilenameUtils, IOUtils}
 import org.joda.time.format.ISODateTimeFormat
 import org.joda.time.{DateTimeZone, LocalDate}
@@ -18,6 +19,19 @@ import scala.concurrent._
 final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val context: ExecutionContext) {
 
   private val client = new AmazonS3Client(config.awsCredentialsProvider)
+
+  def uploadLogFile(location: RemoteLogFile, logFile: File) : Future[RemoteLogFile] = {
+    if (config.uploadTaskLog){
+      Future({
+        blocking {
+          client.putObject(location.bucket, location.key, logFile)
+        }
+        location
+      })
+    } else {
+      Future.successful(location)
+    }
+  }
 
   def download(remote: RemoteDataFile) : Future[File] = Future {
     blocking {
@@ -54,6 +68,10 @@ final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val 
     remote
   }
 
+  def createRemoteLogFile(input: WorkerInput, file: File) : RemoteLogFile = {
+    val specificKey = Seq(outputLogRoot(input), UUID.randomUUID().toString + ".out").mkString("/")
+    RemoteLogFile(config.dataBucketName, specificKey)
+  }
 
   private def uploadResultFuture(remote: RemoteDataFile, local: File) : Future[RemoteDataFile] = Future {
     blocking {
@@ -83,13 +101,24 @@ final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val 
     val job    = task.getIngestionJob
     val source = job.getIngestionSource
     val date   = new LocalDate(job.getStartedAt, DateTimeZone.UTC).toString(LocalDateFormat)
-    s"${source.getName}/${date}/job-${job.getId.toString}/raw/task-${task.getTaskNumber}"
+    s"${source.getName}/$date/job-${job.getId.toString}/raw/task-${task.getTaskNumber}"
   }
 
   private def processedDataFileRoot(task: DataIngestionTask) : String = {
     val job    = task.getIngestionJob
     val source = job.getIngestionSource
     val date   = new LocalDate(job.getStartedAt, DateTimeZone.UTC).toString(LocalDateFormat)
-    s"${source.getName}/${date}/job-${job.getId.toString}/records/task-${task.getTaskNumber}"
+    s"${source.getName}/$date/job-${job.getId.toString}/records/task-${task.getTaskNumber}"
+  }
+
+  private def outputLogRoot(input: WorkerInput) : String = {
+    val date   = LocalDate.now(DateTimeZone.UTC).toString(LocalDateFormat)
+    val prefix = s"${input.source.getName}/$date"
+    input match {
+      case g: GeneralWorkerInput =>
+        s"$prefix/validate-${g.integration.version}/log"
+      case i: IntegrationWorkerInput =>
+        s"$prefix/job-${i.job.getId.toString}/log"
+    }
   }
 }

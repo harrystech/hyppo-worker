@@ -8,7 +8,7 @@ import scala.collection.JavaConversions
 /**
  * This class represents an exception thrown inside of the executor that has now propagated back to the worker
  */
-final class ExecutorException(val executorError: ExecutorError) extends Exception {
+final class ExecutorException(val executorError: ExecutorError) extends Exception(executorError.getMessage) {
 
   def toIntegrationException: IntegrationException = {
     ExecutorException.createIntegrationException(executorError)

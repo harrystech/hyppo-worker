@@ -14,8 +14,9 @@ class CreateTasksCommandTest extends ExecutorCommandTest {
   override def integrationClass = classOf[ProcessedDataStub]
 
   "The create tasks operation" must {
-    val testJob      = TestObjects.testIngestionJob
-    val resultObject = commander.executeCommand(new CreateIngestionTasksCommand(testJob))
+    val testJob = TestObjects.testIngestionJob
+    val output  = commander.executeCommand(new CreateIngestionTasksCommand(testJob))
+    val resultObject = output.result
 
     "produce a correct result type" in {
       resultObject shouldBe a [CreateIngestionTasksResult]

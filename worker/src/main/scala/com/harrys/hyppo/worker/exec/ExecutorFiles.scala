@@ -23,7 +23,8 @@ final class ExecutorFiles(val base: Path) {
   }
 
   def standardOutFiles: Seq[File] = {
-    JavaConversions.collectionAsScalaIterable(FileUtils.listFiles(logDirectory, Array("out"), true)).toSeq.sortBy(_.getName)
+    val files = JavaConversions.collectionAsScalaIterable(FileUtils.listFiles(logDirectory, Array("out"), true)).toSeq
+    files.sortBy(_.getName)
   }
 
   def lastTaskOutputFile: Option[File] = {
