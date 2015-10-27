@@ -56,7 +56,8 @@ public final class ExecutorCommandLoop {
                         if (this.integration == null){
                             this.initializeIntegration();
                         }
-                        new CommanderSocketHandler(mapper, socket, this.integration).handleCommand(command);
+                        final CommanderSocketHandler handler = new CommanderSocketHandler(mapper, socket, this.integration);
+                        handler.handleCommand(command);
                     } catch (Exception e){
                         this.logging.flushLogStream();
                         sendFailureIfPossible(socket, e);
