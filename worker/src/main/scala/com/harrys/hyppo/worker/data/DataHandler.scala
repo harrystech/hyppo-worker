@@ -73,13 +73,6 @@ final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val 
     RemoteLogFile(config.dataBucketName, specificKey)
   }
 
-  private def uploadResultFuture(remote: RemoteDataFile, local: File) : Future[RemoteDataFile] = Future {
-    blocking {
-      client.putObject(remote.bucket, remote.key, local)
-      remote
-    }
-  }
-
   private def createRemoteRawDataFiles(task: DataIngestionTask, files: Seq[File]) : Seq[(RemoteRawDataFile, File)] = {
     val rawFileRoot = rawDataFileRoot(task)
     files.zipWithIndex.map(fileWithIndex => {
@@ -101,19 +94,19 @@ final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val 
     val job    = task.getIngestionJob
     val source = job.getIngestionSource
     val date   = new LocalDate(job.getStartedAt, DateTimeZone.UTC).toString(LocalDateFormat)
-    s"${source.getName}/$date/job-${job.getId.toString}/raw/task-${task.getTaskNumber}"
+    s"${config.storagePrefix}/${source.getName}/$date/job-${job.getId.toString}/raw/task-${task.getTaskNumber}"
   }
 
   private def processedDataFileRoot(task: DataIngestionTask) : String = {
     val job    = task.getIngestionJob
     val source = job.getIngestionSource
     val date   = new LocalDate(job.getStartedAt, DateTimeZone.UTC).toString(LocalDateFormat)
-    s"${source.getName}/$date/job-${job.getId.toString}/records/task-${task.getTaskNumber}"
+    s"${config.storagePrefix}/${source.getName}/$date/job-${job.getId.toString}/records/task-${task.getTaskNumber}"
   }
 
   private def outputLogRoot(input: WorkerInput) : String = {
     val date   = LocalDate.now(DateTimeZone.UTC).toString(LocalDateFormat)
-    val prefix = s"${input.source.getName}/$date"
+    val prefix = s"${config.storagePrefix}/${input.source.getName}/$date"
     input match {
       case g: GeneralWorkerInput =>
         s"$prefix/validate-${g.integration.version}/log"

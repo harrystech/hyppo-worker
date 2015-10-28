@@ -28,6 +28,12 @@ abstract class HyppoConfig(config: Config) extends Serializable {
   //  Location where date storage occurs
   final val dataBucketName: String = config.getString("hyppo.data-bucket-name")
 
+  //  Prefix to insert at the front of all S3 content (code & data)
+  final val storagePrefix: String = config.getString("hyppo.storage-prefix")
+
+  //  Whether or not to print the configuration at application start
+  final val printConfiguration: Boolean = config.getBoolean("hyppo.print-configuration")
+
   //  Timeout duration on operations involving rabbitmq
   final val rabbitMQTimeout: FiniteDuration = Duration(config.getDuration("hyppo.rabbitmq.timeout").toMillis, MILLISECONDS)
 

@@ -3,6 +3,7 @@ package com.harrys.hyppo
 import java.io.File
 
 import akka.actor.ActorSystem
+import com.harrys.hyppo.config.WorkerConfig
 import com.typesafe.config.{ConfigFactory, ConfigRenderOptions}
 import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
@@ -35,7 +36,9 @@ object WorkerMain {
       .withFallback(HyppoWorker.referenceConfig())
       .resolve()
 
-    log.debug(s"Configuration: \n${ fullConfig.root().render(ConfigRenderOptions.defaults().setOriginComments(true).setFormatted(true)) }")
+    if (new WorkerConfig(fullConfig).printConfiguration){
+      log.info(s"Configuration: \n${ fullConfig.root().render(ConfigRenderOptions.defaults().setOriginComments(true).setFormatted(true)) }")
+    }
 
     val worker = HyppoWorker(ActorSystem("hyppo", fullConfig))
 
