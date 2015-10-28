@@ -70,6 +70,7 @@ final class RabbitWorkQueueProxy(config: CoordinatorConfig) extends RabbitPartic
     val body  = serialize(work)
     val props = new BasicProperties.Builder()
       .correlationId(UUID.randomUUID.toString)
+      .contentType("application/x-java-serialized-object")
       .replyTo(HyppoQueue.ResultsQueueName)
       .timestamp(new Date())
       .build()
