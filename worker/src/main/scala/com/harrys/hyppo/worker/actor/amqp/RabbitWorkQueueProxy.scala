@@ -104,7 +104,7 @@ final class RabbitWorkQueueProxy(config: CoordinatorConfig) extends RabbitPartic
     })
     statusFuture.onSuccess({
       case statuses =>
-        val potentials = statuses.filter(_.name.startsWith(HyppoQueue.IntegrationQueuePrefix)).filter(_.size == 0)
+        val potentials = statuses.filter(_.name.startsWith(HyppoQueue.IntegrationQueuePrefix)).filter(_.isEmpty)
         val threshold  = LocalDateTime.now().minus(14, ChronoUnit.DAYS)
         val removals   = potentials.filter(_.idleSince.isBefore(threshold))
         if (removals.nonEmpty){
