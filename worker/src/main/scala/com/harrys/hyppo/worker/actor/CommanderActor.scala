@@ -20,6 +20,7 @@ import com.harrys.hyppo.worker.data.{DataHandler, TempFilePool}
 import com.harrys.hyppo.worker.proc.{CommandExecutionException, CommandOutput, ExecutorException, SimpleCommander}
 
 import scala.collection.JavaConversions
+import scala.concurrent.duration._
 import scala.concurrent.{Await, Future, TimeoutException}
 import scala.io.Source
 import scala.util.{Failure, Success}
@@ -63,7 +64,7 @@ final class CommanderActor
   }
 
   override def postStop() : Unit = {
-    simpleCommander.forceShutdown()
+    simpleCommander.sendExitCommandAndWaitThenKill(Duration(1, SECONDS))
     simpleCommander.executor.deleteFiles()
   }
 
@@ -90,7 +91,6 @@ final class CommanderActor
       simpleCommander.executor.files.cleanupLogs()
 
       val taskActor = sender()
-
       log.info(s"Starting work on Rabbit item ${ item.rabbitItem.printableDetails }")
       Future({
         val doneFuture = item match {

@@ -70,6 +70,7 @@ final class LaunchedExecutor(val process: Process, val files: ExecutorFiles) {
 
   def killProcess() : Int = {
     if (process.isAlive){
+      log.info("Killing executor process forcibly")
       process.destroyForcibly().waitFor()
     } else {
       process.exitValue()

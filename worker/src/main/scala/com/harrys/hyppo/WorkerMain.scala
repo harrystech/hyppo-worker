@@ -3,7 +3,6 @@ package com.harrys.hyppo
 import java.io.File
 
 import akka.actor.ActorSystem
-import com.harrys.hyppo.config.WorkerConfig
 import com.typesafe.config.{ConfigFactory, ConfigRenderOptions}
 import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
@@ -32,27 +31,28 @@ object WorkerMain {
         ConfigFactory.defaultApplication()
       }
 
-    val fullConfig = appConfig
-      .withFallback(HyppoWorker.referenceConfig())
-      .resolve()
+    //  This had better not work.
+    ConfigFactory.invalidateCaches()
 
-    if (new WorkerConfig(fullConfig).printConfiguration){
-      log.info(s"Configuration: \n${ fullConfig.root().render(ConfigRenderOptions.defaults().setOriginComments(true).setFormatted(true)) }")
+    val config = HyppoWorker.createConfig(appConfig)
+
+    if (config.printConfiguration){
+      log.info(s"Configuration: \n${ config.underlying.root().render(ConfigRenderOptions.defaults().setOriginComments(true).setFormatted(true)) }")
     }
 
-    val worker = HyppoWorker(ActorSystem("hyppo", fullConfig))
-
+    val system = ActorSystem("hyppo", config.underlying)
     Runtime.getRuntime.addShutdownHook(new Thread(new Runnable {
       override def run() : Unit = {
-        if (!worker.system.isTerminated){
-          worker.system.shutdown()
+        if (!system.isTerminated){
+          system.shutdown()
           log.info("Waiting for akka system shutdown...")
-          worker.system.awaitTermination(Duration(8, SECONDS))
+          system.awaitTermination(Duration(8, SECONDS))
         }
         log.info("ActorSystem shutdown complete")
       }
     }))
-
-    worker.system.awaitTermination()
+    //  Instantiate the workers and start processing
+    val worker = new HyppoWorker(system, config)
+    worker.awaitSystemTermination()
   }
 }

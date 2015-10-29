@@ -40,16 +40,21 @@ object HyppoCoordinator {
   }
 
   def apply(system: ActorSystem, dispatcher: WorkDispatcher, handler: WorkResponseHandler) : HyppoCoordinator = {
-    apply(system, settingsFromActorSystem(system), dispatcher, handler)
+    val config = createConfig(system.settings.config)
+    apply(system, config, dispatcher, handler)
   }
 
-  def settingsFromActorSystem(system: ActorSystem) : CoordinatorConfig = {
-    val config = system.settings.config
-      .withFallback(referenceConfig())
+  def createConfig(appConfig: Config) : CoordinatorConfig = {
+    val config = appConfig.withFallback(referenceConfig())
+
+    val merged = requiredConfig().
+      withFallback(config)
       .resolve()
 
-    new CoordinatorConfig(config)
+    new CoordinatorConfig(merged)
   }
+
+  def requiredConfig(): Config = ConfigUtils.resourceFileConfig("/com/harrys/hyppo/config/required.conf")
 
   def referenceConfig(): Config = ConfigUtils.resourceFileConfig("/com/harrys/hyppo/config/reference.conf")
 }
