@@ -14,6 +14,7 @@ import com.harrys.hyppo.worker.api.proto.WorkerInput
 import com.rabbitmq.client.GetResponse
 
 import scala.concurrent.{Await, Future}
+import scala.util.Random
 
 /**
  * Created by jpetty on 9/16/15.
@@ -65,13 +66,14 @@ final class RabbitWorkerDelegation(config: WorkerConfig) extends RabbitParticipa
   }
 
   def integrationChoiceOrder: List[QueueStatusInfo] = {
-    val ordering = currentStats.filterNot(_.isEmpty).sortBy(- _.estimatedCompletionTime).toList
+    val ordering = currentStats.filterNot(_.isEmpty).sortBy(- _.estimatedCompletionTime).toIndexedSeq
     if (ordering.isEmpty){
       List()
     } else {
-      val head = ordering.head
-      val ties = ordering.filter(_.estimatedCompletionTime.equals(head.estimatedCompletionTime))
-      ties.sortBy(_.idleSince.toInstant(ZoneOffset.UTC).toEpochMilli)
+      var ties = ordering.filter(_.estimatedCompletionTime.equals(ordering.head.estimatedCompletionTime))
+      ties = ties.sortBy(_.idleSince.toInstant(ZoneOffset.UTC).toEpochMilli)
+      ties = ties.filter(_.idleSince.isEqual(ties.head.idleSince))
+      Random.shuffle(ties).toList
     }
   }
 
