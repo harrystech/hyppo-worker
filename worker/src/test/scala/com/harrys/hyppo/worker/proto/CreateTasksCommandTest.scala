@@ -2,7 +2,7 @@ package com.harrys.hyppo.worker.proto
 
 import com.harrys.hyppo.executor.proto.com.CreateIngestionTasksCommand
 import com.harrys.hyppo.executor.proto.res.CreateIngestionTasksResult
-import com.harrys.hyppo.worker.{TestObjects, ProcessedDataStub}
+import com.harrys.hyppo.worker.{ProcessedDataStub, TestObjects}
 
 import scala.concurrent.duration._
 

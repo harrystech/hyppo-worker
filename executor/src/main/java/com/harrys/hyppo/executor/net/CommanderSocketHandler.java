@@ -1,9 +1,7 @@
 package com.harrys.hyppo.executor.net;
 
-import com.harrys.hyppo.executor.proto.ExecutorInitMessage;
 import com.harrys.hyppo.executor.proto.StartOperationCommand;
 import com.harrys.hyppo.executor.proto.com.*;
-import com.harrys.hyppo.executor.proto.init.ExecutorReady;
 import com.harrys.hyppo.executor.run.*;
 import com.harrys.hyppo.source.api.DataIntegration;
 import org.codehaus.jackson.map.ObjectMapper;

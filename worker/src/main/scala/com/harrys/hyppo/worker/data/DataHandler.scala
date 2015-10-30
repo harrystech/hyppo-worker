@@ -73,6 +73,11 @@ final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val 
     RemoteLogFile(config.dataBucketName, specificKey)
   }
 
+  def newRemoteLogLocation(input: WorkerInput) : RemoteLogFile = {
+    val specificKey = Seq(outputLogRoot(input), UUID.randomUUID().toString + ".out").mkString("/")
+    RemoteLogFile(config.dataBucketName, specificKey)
+  }
+
   private def createRemoteRawDataFiles(task: DataIngestionTask, files: Seq[File]) : Seq[(RemoteRawDataFile, File)] = {
     val rawFileRoot = rawDataFileRoot(task)
     files.zipWithIndex.map(fileWithIndex => {

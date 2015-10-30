@@ -2,7 +2,7 @@ package com.harrys.hyppo.worker.proto
 
 import com.harrys.hyppo.executor.proto.com.{FetchProcessedDataCommand, PersistProcessedDataCommand}
 import com.harrys.hyppo.executor.proto.res.{FetchProcessedDataResult, PersistProcessedDataResult}
-import com.harrys.hyppo.worker.{TestObjects, ProcessedDataStub}
+import com.harrys.hyppo.worker.{ProcessedDataStub, TestObjects}
 
 import scala.collection.JavaConversions
 import scala.concurrent.duration._
@@ -15,7 +15,7 @@ class ProcessedDataTest extends ExecutorCommandTest {
   override def integrationClass = classOf[ProcessedDataStub]
 
   "Processed Data Integrations must" must {
-    val testTask = TestObjects.testIngestionTask
+    val testTask = TestObjects.testIngestionTask()
 
     val fetchObject = commander.executeCommand(new FetchProcessedDataCommand(testTask)).result
 
@@ -52,7 +52,7 @@ class ProcessedDataTest extends ExecutorCommandTest {
     }
 
     "then exit cleanly" in {
-      commander.sendExitCommandAndWait(Duration(1, SECONDS)) shouldEqual 0
+      commander.sendExitCommandAndWaitThenKill(Duration(1, SECONDS)) shouldEqual 0
     }
   }
 }

@@ -2,8 +2,8 @@ package com.harrys.hyppo.worker.actor.amqp
 
 import akka.testkit.TestActorRef
 import com.harrys.hyppo.config.CoordinatorConfig
-import com.harrys.hyppo.worker.{TestObjects, TestConfig}
 import com.harrys.hyppo.worker.api.proto.CreateIngestionTasksRequest
+import com.harrys.hyppo.worker.{TestConfig, TestObjects}
 
 import scala.util.Try
 

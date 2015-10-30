@@ -31,8 +31,9 @@ fork in run := true
 //--
 
 libraryDependencies ++= Seq(
-  "org.scalatest" %% "scalatest" % "2.2.4" % "test",
-  "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % "test"
+  "org.scalatest" %% "scalatest" % "2.2.4" % Test,
+  "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
+  "org.mockito" % "mockito-core" % "1.10.19" % Test
 )
 
 //  Set the classpath so we can fork a new JVM

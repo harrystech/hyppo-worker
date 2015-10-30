@@ -7,7 +7,8 @@ import com.github.sstone.amqp.Amqp.{Error, Ok}
 import com.harrys.hyppo.Lifecycle
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.actor.WorkerFSM._
-import com.harrys.hyppo.worker.actor.amqp.{SingleTaskActor, WorkQueueItem}
+import com.harrys.hyppo.worker.actor.amqp.WorkQueueItem
+import com.harrys.hyppo.worker.actor.task.TaskFSM
 import com.harrys.hyppo.worker.api.code.ExecutableIntegration
 import com.harrys.hyppo.worker.api.proto.{GeneralWorkerInput, IntegrationWorkerInput}
 import com.harrys.hyppo.worker.cache.{JarLoadingActor, LoadedJarFile}
@@ -18,7 +19,7 @@ import scala.concurrent.duration._
 import scala.util.Failure
 
 /**
- * Created by jpetty on 8/4/15.
+ * Created by jpetty on 10/30/15.
  */
 final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends LoggingFSM[WorkerState, CommanderState] {
 
@@ -174,7 +175,7 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
   private var commanderCounter = 0
 
   def createTaskActor(item: WorkQueueItem, commander: ActorRef) : ActorRef = {
-    context.watch(context.actorOf(Props(classOf[SingleTaskActor], config, item, commander)))
+    context.watch(context.actorOf(Props(classOf[TaskFSM], config, item, commander)))
   }
 
   def createCommanderActor(item: WorkQueueItem, jarFiles: Seq[LoadedJarFile]) : ActiveCommander = {
@@ -207,7 +208,6 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
 object WorkerFSM {
   val PollingTimerName = "polling"
 
-
   sealed trait WorkerState
   case object Idle extends WorkerState
   case object Running extends WorkerState
@@ -230,7 +230,7 @@ object WorkerFSM {
     commander:  ActorRef,
     taskActor:  ActorRef,
     affinity:   Option[WorkerAffinity]
-  ) extends CommanderState {
+    ) extends CommanderState {
 
     def workPreference: Option[ExecutableIntegration] = affinity match {
       case Some(value) if !value.isExpired() => Some(value.integration)

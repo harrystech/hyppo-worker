@@ -1,8 +1,8 @@
 package com.harrys.hyppo.worker.proto
 
-import com.harrys.hyppo.executor.proto.com.{PersistProcessedDataCommand, FetchRawDataCommand, ProcessRawDataCommand}
-import com.harrys.hyppo.executor.proto.res.{PersistProcessedDataResult, ProcessRawDataResult, FetchRawDataResult}
-import com.harrys.hyppo.worker.{TestObjects, RawDataStub}
+import com.harrys.hyppo.executor.proto.com.{FetchRawDataCommand, PersistProcessedDataCommand, ProcessRawDataCommand}
+import com.harrys.hyppo.executor.proto.res.{FetchRawDataResult, PersistProcessedDataResult, ProcessRawDataResult}
+import com.harrys.hyppo.worker.{RawDataStub, TestObjects}
 
 import scala.concurrent.duration._
 

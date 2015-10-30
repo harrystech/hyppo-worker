@@ -4,9 +4,9 @@ import java.time.LocalDateTime
 
 import akka.testkit.{TestActorRef, TestProbe}
 import com.harrys.hyppo.config.WorkerConfig
-import com.harrys.hyppo.worker.{TestObjects, TestConfig}
-import com.harrys.hyppo.worker.actor.{RequestForPreferredWork, RequestForAnyWork}
-import com.harrys.hyppo.worker.api.proto.{RemoteLogFile, RemoteRawDataFile, CreateIngestionTasksRequest, FailureResponse}
+import com.harrys.hyppo.worker.actor.{RequestForAnyWork, RequestForPreferredWork}
+import com.harrys.hyppo.worker.api.proto.{CreateIngestionTasksRequest, FailureResponse, RemoteLogFile}
+import com.harrys.hyppo.worker.{TestConfig, TestObjects}
 
 import scala.util.Try
 

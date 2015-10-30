@@ -3,8 +3,8 @@ package com.harrys.hyppo.worker
 import java.util.{Date, UUID}
 
 import com.harrys.hyppo.source.api.PersistingSemantics
-import com.harrys.hyppo.source.api.model.{DataIngestionTask, IngestionSource, DataIngestionJob}
-import com.harrys.hyppo.worker.api.code.{IntegrationDetails, IntegrationSchema, IntegrationCode, ExecutableIntegration}
+import com.harrys.hyppo.source.api.model.{DataIngestionJob, DataIngestionTask, IngestionSource}
+import com.harrys.hyppo.worker.api.code.{ExecutableIntegration, IntegrationCode, IntegrationDetails, IntegrationSchema}
 import com.typesafe.config.ConfigFactory
 
 /**
@@ -30,10 +30,10 @@ object TestObjects {
     new DataIngestionTask(job, 1, ConfigFactory.empty())
   }
 
-  def testProcessedDataIntegration(source: IngestionSource): ExecutableIntegration = {
+  def testProcessedDataIntegration(source: IngestionSource, semantics: PersistingSemantics = PersistingSemantics.Unsafe): ExecutableIntegration = {
     val schema = IntegrationSchema(new ProcessedDataStub().avroType().recordSchema())
     val code   = IntegrationCode(classOf[ProcessedDataStub].getCanonicalName, Seq())
-    ExecutableIntegration(source, schema, code, IntegrationDetails(isRawDataIntegration = false, persistingSemantics = PersistingSemantics.Default, 1))
+    ExecutableIntegration(source, schema, code, IntegrationDetails(isRawDataIntegration = false, persistingSemantics = semantics, 1))
   }
 
 }

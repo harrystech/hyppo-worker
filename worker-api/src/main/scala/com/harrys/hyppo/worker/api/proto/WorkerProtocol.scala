@@ -7,15 +7,22 @@ import com.harrys.hyppo.worker.api.code.{ExecutableIntegration, IntegrationCode,
 /**
  * Created by jpetty on 9/18/15.
  */
-sealed trait WorkerInput extends Product with Serializable {
+sealed trait WorkerInput extends Product with Serializable { self =>
   def code: IntegrationCode
   def source: IngestionSource
+  def subtaskCount: Int
+  def summaryString: String = {
+    s"${self.productPrefix}(source=${source.getName})"
+  }
 }
-sealed trait IntegrationWorkerInput extends WorkerInput {
+sealed trait IntegrationWorkerInput extends WorkerInput { self =>
   def integration: ExecutableIntegration
   def job: DataIngestionJob
   override final def code: IntegrationCode   = integration.code
   override final def source: IngestionSource = integration.source
+  override def summaryString: String = {
+    s"${self.productPrefix}(source=${source.getName} job=${job.getId.toString})"
+  }
 }
 sealed trait GeneralWorkerInput extends WorkerInput {
   def integration: UnvalidatedIntegration
@@ -41,7 +48,9 @@ final case class FailureResponse
 //
 
 @SerialVersionUID(1L)
-final case class ValidateIntegrationRequest(override val integration: UnvalidatedIntegration) extends GeneralWorkerInput
+final case class ValidateIntegrationRequest(override val integration: UnvalidatedIntegration) extends GeneralWorkerInput {
+  override def subtaskCount: Int = 1
+}
 
 @SerialVersionUID(1L)
 final case class ValidationErrorDetails(message: String, exception: Option[IntegrationException])
@@ -68,7 +77,9 @@ final case class CreateIngestionTasksRequest
 (
   override val integration: ExecutableIntegration,
   job: DataIngestionJob
-) extends IntegrationWorkerInput
+) extends IntegrationWorkerInput {
+  override def subtaskCount: Int = 1
+}
 
 @SerialVersionUID(1L)
 final case class CreateIngestionTasksResponse
@@ -92,6 +103,7 @@ final case class FetchProcessedDataRequest
   task: DataIngestionTask
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
+  override def subtaskCount: Int = 1
 }
 
 
@@ -119,6 +131,7 @@ final case class FetchRawDataRequest
   task: DataIngestionTask
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
+  override def subtaskCount: Int = 1
 }
 
 @SerialVersionUID(1L)
@@ -144,6 +157,7 @@ final case class ProcessRawDataRequest
   files: Seq[RemoteRawDataFile]
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
+  override def subtaskCount: Int = 1
 }
 
 @SerialVersionUID(1L)
@@ -172,12 +186,15 @@ final case class PersistProcessedDataRequest
   override val integration: ExecutableIntegration,
   override val job:   DataIngestionJob,
   data:  Seq[ProcessedTaskData]
-) extends IntegrationWorkerInput
+) extends IntegrationWorkerInput {
+
+  override def subtaskCount: Int = data.size
+}
 
 @SerialVersionUID(1L)
 final case class PersistProcessedDataResponse
 (
-  override val input: PersistProcessedDataRequest,
+  override val input:   PersistProcessedDataRequest,
   override val logFile: RemoteLogFile,
   persisted: ProcessedTaskData
 ) extends WorkerResponse
