@@ -3,14 +3,13 @@ package com.harrys.hyppo.worker.actor.task
 import akka.actor.Terminated
 import akka.testkit.{TestFSMRef, TestProbe}
 import com.github.sstone.amqp.Amqp
-import com.github.sstone.amqp.Amqp.{Publish, Ack}
+import com.github.sstone.amqp.Amqp.{Ack, Publish}
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.source.api.PersistingSemantics
 import com.harrys.hyppo.worker.actor.task.TaskFSMStatus.{PerformingOperation, PreparingToStart, UploadingLogs}
 import com.harrys.hyppo.worker.actor.{TestAmqp, WorkerFSMTests}
 import com.harrys.hyppo.worker.api.proto._
-import com.harrys.hyppo.worker.avro.AvroTest
-import com.harrys.hyppo.worker.{ProcessedDataStub, TestConfig, TestObjects}
+import com.harrys.hyppo.worker.{TestConfig, TestObjects}
 import org.scalatest.mock.MockitoSugar
 
 /**

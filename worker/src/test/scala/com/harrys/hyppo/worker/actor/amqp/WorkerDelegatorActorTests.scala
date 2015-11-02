@@ -1,6 +1,7 @@
 package com.harrys.hyppo.worker.actor.amqp
 
 import java.time.LocalDateTime
+import java.util.UUID
 
 import akka.testkit.{TestActorRef, TestProbe}
 import com.harrys.hyppo.config.WorkerConfig
@@ -8,6 +9,7 @@ import com.harrys.hyppo.worker.actor.{RequestForAnyWork, RequestForPreferredWork
 import com.harrys.hyppo.worker.api.proto.{CreateIngestionTasksRequest, FailureResponse, RemoteLogFile}
 import com.harrys.hyppo.worker.{TestConfig, TestObjects}
 
+import scala.concurrent.duration._
 import scala.util.Try
 
 /**
@@ -44,10 +46,11 @@ class WorkerDelegatorActorTests extends RabbitMQTests  {
       val connection  = config.rabbitMQConnectionFactory.newConnection()
       val channel     = connection.createChannel()
 
-      val queueName = HyppoQueue.integrationQueueName(integration)
+      val queueName  = HyppoQueue.integrationQueueName(integration)
+      val properties = AMQPMessageProperties.enqueueProperties(UUID.randomUUID(), queueName, Duration(5, SECONDS))
       channel.queueDelete(queueName)
       channel.queueDeclare(queueName, false, false, false, null)
-      channel.basicPublish("", queueName, null, serializer.serialize(work))
+      channel.basicPublish("", queueName, properties, serializer.serialize(work))
       try {
         val probe = TestProbe()
         delegator ! RabbitQueueStatusActor.QueueStatusUpdate(Seq(QueueStatusInfo(name = queueName, size = 1, rate = 0.0, idleSince = LocalDateTime.now())))

@@ -1,6 +1,5 @@
 package com.harrys.hyppo.worker.actor.amqp
 
-import java.time.format.DateTimeFormatter
 import java.time.{Duration, LocalDateTime, ZoneId, ZonedDateTime}
 import java.util.{Date, UUID}
 
@@ -12,34 +11,42 @@ import com.rabbitmq.client.AMQP.BasicProperties
 object AMQPMessageProperties {
   final val SerializationMimeType = "application/x-java-serialized-object"
   private final val UTCZoneId = ZoneId.of("UTC")
-  private final val ExpirationFormat = DateTimeFormatter.ISO_ZONED_DATE_TIME
 
-  final case class HyppoQueueProperties(correlationId: UUID, replyQueue: String, startedAt: LocalDateTime, expiredAt: LocalDateTime) {
-    def isExpired: Boolean = {
-      expiredAt.isBefore(LocalDateTime.now(UTCZoneId))
-    }
-    def workAge: Duration = Duration.between(startedAt, LocalDateTime.now(UTCZoneId))
+  def currentLocalDateTime: LocalDateTime = LocalDateTime.now(UTCZoneId)
+
+  def enqueueProperties(correlationId: UUID, replyToQueue: String, expiration: scala.concurrent.duration.FiniteDuration) : BasicProperties = {
+    enqueueProperties(correlationId, replyToQueue, currentLocalDateTime, Duration.ofMillis(expiration.toMillis))
   }
 
-  def enqueueProperties(correlationId: UUID, resultQueue: String, startedAt: LocalDateTime, expire: LocalDateTime) : BasicProperties = {
-    enqueueProperties(HyppoQueueProperties(correlationId, resultQueue, startedAt, expire))
+
+  def enqueueProperties(correlationId: UUID, replyToQueue: String, expiration: Duration) : BasicProperties = {
+    enqueueProperties(correlationId, replyToQueue, currentLocalDateTime, expiration)
   }
 
-  def enqueueProperties(headers: HyppoQueueProperties) : BasicProperties = {
+  def enqueueProperties(correlationId: UUID, replyToQueue: String, startedAt: LocalDateTime, expiration: scala.concurrent.duration.FiniteDuration) : BasicProperties = {
+    enqueueProperties(correlationId, replyToQueue, startedAt, Duration.ofMillis(expiration.toMillis))
+  }
+
+  def enqueueProperties(correlationId: UUID, replyToQueue: String, startedAt: LocalDateTime, expiration: Duration) : BasicProperties = {
+    val props = HyppoMessageProperties(correlationId, replyToQueue, startedAt, expiration)
+    enqueueProperties(props)
+  }
+
+  def enqueueProperties(headers: HyppoMessageProperties) : BasicProperties = {
     new BasicProperties.Builder()
       .contentType(SerializationMimeType)
-      .expiration(headers.expiredAt.atZone(UTCZoneId).format(ExpirationFormat))
+      .expiration(headers.timeToLive.toMillis.toString)
       .timestamp(Date.from(headers.startedAt.atZone(UTCZoneId).toInstant))
-      .replyTo(headers.replyQueue)
+      .replyTo(headers.replyToQueue)
       .correlationId(headers.correlationId.toString)
       .build()
   }
 
-  def parseItemProperties(properties: BasicProperties) : HyppoQueueProperties = {
+  def parseItemProperties(properties: BasicProperties) : HyppoMessageProperties = {
     val replyQueue  = properties.getReplyTo
     val correlation = UUID.fromString(properties.getCorrelationId)
-    val expiration  = ZonedDateTime.parse(properties.getExpiration, ExpirationFormat).toLocalDateTime
+    val expiration  = Duration.ofMillis(properties.getExpiration.toLong)
     val startedAt   = ZonedDateTime.ofInstant(properties.getTimestamp.toInstant, UTCZoneId).toLocalDateTime
-    HyppoQueueProperties(correlation, replyQueue, startedAt, expiration)
+    HyppoMessageProperties(correlation, replyQueue, startedAt, expiration)
   }
 }

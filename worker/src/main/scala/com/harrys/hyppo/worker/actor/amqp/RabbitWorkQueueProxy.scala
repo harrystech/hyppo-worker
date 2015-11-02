@@ -1,8 +1,6 @@
 package com.harrys.hyppo.worker.actor.amqp
 
-import java.time.LocalDateTime
-import java.time.temporal.ChronoUnit
-import java.util.{Date, UUID}
+import java.util.UUID
 
 import akka.pattern.ask
 import akka.util.Timeout
@@ -10,9 +8,8 @@ import com.github.sstone.amqp.Amqp._
 import com.github.sstone.amqp.{ChannelOwner, ConnectionOwner}
 import com.harrys.hyppo.config.CoordinatorConfig
 import com.harrys.hyppo.worker.api.proto.{GeneralWorkerInput, IntegrationWorkerInput, WorkerInput}
-import com.rabbitmq.client.AMQP.BasicProperties
 
-import scala.concurrent.{Await, Future, blocking}
+import scala.concurrent.Await
 
 /**
  * Created by jpetty on 9/16/15.
@@ -24,29 +21,11 @@ final class RabbitWorkQueueProxy(config: CoordinatorConfig) extends RabbitPartic
   //  Establish the RabbitMQ connection and channel to use for work tasks
   val connection = createRabbitConnection(config)
   val channel    = context.watch(ConnectionOwner.createChildActor(connection, ChannelOwner.props(), name = Some("enqueue-channel")))
-
-  val httpClient = config.newRabbitMQApiClient()
-
   val generalQueue = Await.result(HyppoQueue.createGeneralWorkQueue(context, config, channel), config.rabbitMQTimeout)
-
-  //  Used to actually perform the queue cleanup
-  private final case class CleanupOldQueues(queues: Seq[String])
-
-  //  Used to trigger the timer event
-  private case object TriggerQueueCleanup
-
-  val cleanupTimer = context.system.scheduler.schedule(config.queueSweepInterval, config.queueSweepInterval, self, TriggerQueueCleanup)
-
-  override def postStop() : Unit = {
-    cleanupTimer.cancel()
-    super.postStop()
-  }
 
   override def receive: Receive = {
     case work: GeneralWorkerInput     => publishGeneralWork(work)
     case work: IntegrationWorkerInput => publishIntegrationWork(work)
-    case CleanupOldQueues(queues)     => removeOldQueues(queues)
-    case TriggerQueueCleanup          => checkForIdleQueues()
   }
 
   def publishGeneralWork(work: GeneralWorkerInput) : Unit = {
@@ -68,12 +47,7 @@ final class RabbitWorkQueueProxy(config: CoordinatorConfig) extends RabbitPartic
     implicit val timeout = Timeout(config.rabbitMQTimeout)
 
     val body  = serialize(work)
-    val props = new BasicProperties.Builder()
-      .correlationId(UUID.randomUUID.toString)
-      .contentType("application/x-java-serialized-object")
-      .replyTo(HyppoQueue.ResultsQueueName)
-      .timestamp(new Date())
-      .build()
+    val props = AMQPMessageProperties.enqueueProperties(UUID.randomUUID(), HyppoQueue.ResultsQueueName, config.workTimeout)
 
     (channel ? Publish("", queue, body, Some(props))).collect {
       case Ok(_, _) =>
@@ -94,22 +68,5 @@ final class RabbitWorkQueueProxy(config: CoordinatorConfig) extends RabbitPartic
           log.error(cause, s"Failed to delete old unused queue: $name")
       }
     }
-  }
-
-  def checkForIdleQueues() : Unit = {
-    val statusFuture = Future({
-      blocking {
-        httpClient.fetchQueueStatusInfo()
-      }
-    })
-    statusFuture.onSuccess({
-      case statuses =>
-        val potentials = statuses.filter(_.name.startsWith(HyppoQueue.IntegrationQueuePrefix)).filter(_.isEmpty)
-        val threshold  = LocalDateTime.now().minus(14, ChronoUnit.DAYS)
-        val removals   = potentials.filter(_.idleSince.isBefore(threshold))
-        if (removals.nonEmpty){
-          self ! CleanupOldQueues(removals.map(_.name))
-        }
-    })
   }
 }

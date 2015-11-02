@@ -23,7 +23,7 @@ final class RabbitResponseQueueConsumer(config: CoordinatorConfig, handler: Work
   val connection = createRabbitConnection(config)
   val consumer   = Await.result(HyppoQueue.createResultsQueueConsumer(context, config, connection), config.rabbitMQTimeout)
 
-  override final def receive: Receive = {
+  override def receive: Receive = {
     case delivery: Delivery =>
       try {
         val response = deserialize[WorkerResponse](delivery.body)

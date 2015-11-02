@@ -13,6 +13,7 @@ import com.harrys.hyppo.worker.api.code.ExecutableIntegration
 import com.rabbitmq.client.AMQP
 
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 /**
  * Created by jpetty on 9/14/15.
@@ -27,6 +28,9 @@ object HyppoQueue {
 
   final val IntegrationQueuePrefix = s"$WorkQueuePrefix.integration"
 
+  private final val QueueTLLHeader = "x-expires"
+  private final val QueueTTLValue  = Duration(7, DAYS).toMillis
+
   def integrationQueueName(integration: ExecutableIntegration) : String = {
     val sourceFix = integration.sourceName.replaceAll("\\s", "_")
     val version   = s"version-${integration.details.versionNumber}"
@@ -39,7 +43,9 @@ object HyppoQueue {
 
   def integrationWorkQueueParams(integration: ExecutableIntegration) : QueueParameters = {
     val name = integrationQueueName(integration)
-    QueueParameters(name, passive = false, durable = true, exclusive = false, autodelete = false)
+    //  Allows RabbitMQ to auto-expire the queue if it goes unused for long enough
+    val args = Map[String, AnyRef](QueueTLLHeader -> QueueTTLValue.underlying())
+    QueueParameters(name, passive = false, durable = true, exclusive = false, autodelete = false, args = args)
   }
 
   def resultsQueueParams() : QueueParameters = {

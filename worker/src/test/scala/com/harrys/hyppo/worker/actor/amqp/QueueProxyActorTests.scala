@@ -24,7 +24,7 @@ class QueueProxyActorTests extends RabbitMQTests  {
       val work        = CreateIngestionTasksRequest(integration, TestObjects.testIngestionJob(source))
       val connection  = config.rabbitMQConnectionFactory.newConnection()
       val channel     = connection.createChannel()
-      val queueName = HyppoQueue.integrationQueueName(integration)
+      val queueName   = HyppoQueue.integrationQueueName(integration)
 
       try {
         channel.queueDelete(queueName)

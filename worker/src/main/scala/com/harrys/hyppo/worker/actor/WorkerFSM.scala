@@ -173,9 +173,11 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
   }
 
   private var commanderCounter = 0
+  private var taskFSMCounter   = 0
 
   def createTaskActor(item: WorkQueueItem, commander: ActorRef) : ActorRef = {
-    context.watch(context.actorOf(Props(classOf[TaskFSM], config, item, commander)))
+    taskFSMCounter += 1
+    context.watch(context.actorOf(Props(classOf[TaskFSM], config, item, commander), name = "task-" + taskFSMCounter))
   }
 
   def createCommanderActor(item: WorkQueueItem, jarFiles: Seq[LoadedJarFile]) : ActiveCommander = {

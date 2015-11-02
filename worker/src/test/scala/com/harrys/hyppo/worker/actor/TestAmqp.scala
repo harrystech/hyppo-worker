@@ -10,6 +10,8 @@ import com.rabbitmq.client.{Envelope, GetResponse}
 import org.mockito.Mockito._
 import org.scalatest.mock.MockitoSugar
 
+import scala.concurrent.duration._
+
 /**
  * Created by jpetty on 10/30/15.
  */
@@ -28,7 +30,7 @@ object TestAmqp extends MockitoSugar {
     val envelope   = mock[Envelope]
       when(envelope.getDeliveryTag).thenReturn(nextDeliveryTag)
     when(get.getEnvelope).thenReturn(envelope)
-    when(get.getProps).thenReturn(AMQPMessageProperties.enqueueProperties(UUID.randomUUID, "", LocalDateTime.now(), LocalDateTime.now().plusHours(1)))
+    when(get.getProps).thenReturn(AMQPMessageProperties.enqueueProperties(UUID.randomUUID, "", LocalDateTime.now(), Duration(10, MINUTES)))
     when(get.getBody).thenReturn(serializer.serialize(input))
 
     get

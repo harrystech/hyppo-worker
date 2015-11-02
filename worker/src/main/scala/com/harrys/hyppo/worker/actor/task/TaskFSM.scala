@@ -25,22 +25,6 @@ final class TaskFSM
   commander:  ActorRef
 ) extends LoggingFSM[TaskFSMStatus, ResultLogData] {
 
-
-  val idempotent: Boolean = item.input match {
-    case p: PersistProcessedDataRequest if p.integration.details.persistingSemantics == PersistingSemantics.Unsafe =>
-      log.info(s"Task ${ p.summaryString } is not idempotent and will assume aggressive ACK behaviors")
-      false
-    case _ =>
-      log.info(s"Task ${ item.input.summaryString } is idempotent and will use lazy ACK behaviors")
-      false
-  }
-
-  onTransition {
-    //  When dealing with unsafe operations, the ACK must happen immediately before
-    // the work is started in the executor
-    case PreparingToStart -> PerformingOperation if !idempotent => sendAckForItem()
-  }
-
   when(PreparingToStart){
     case Event(OperationStarting, data) =>
       log.info("Commander began executing operation")
@@ -131,6 +115,30 @@ final class TaskFSM
       taskFullyCompleted()
   }
 
+
+
+  val idempotent: Boolean = item.input match {
+    case p: PersistProcessedDataRequest if p.integration.details.persistingSemantics == PersistingSemantics.Unsafe =>
+      log.debug(s"Task ${ p.summaryString } is not idempotent and will assume aggressive ACK behaviors")
+      false
+    case _ =>
+      log.debug(s"Task ${ item.input.summaryString } is idempotent and will use lazy ACK behaviors")
+      false
+  }
+
+  onTransition {
+    //  When dealing with unsafe operations, the ACK must happen immediately before
+    // the work is started in the executor
+    case PreparingToStart -> PerformingOperation if !idempotent => sendAckForItem()
+    //  Always log transition details
+    case from -> to => logTransitionDetails(from, to)
+  }
+
+  onTermination {
+    case StopEvent(reason, _, _) =>
+      log.info(s"Stopped ${item.input.summaryString} : ${ reason.toString }")
+  }
+
   private val serialization = new AMQPSerialization(context)
   private var hasSentAck    = false
 
@@ -144,6 +152,10 @@ final class TaskFSM
   //
 
   def rabbit: RabbitQueueItem = item.rabbitItem
+
+  def logTransitionDetails(from: TaskFSMStatus, to: TaskFSMStatus): Unit = {
+    log.debug(s"${ item.input.summaryString } - ${ from }(${ stateData.inspect }) => ${ to }(${ nextStateData.inspect })")
+  }
 
   def waitForLogUploads() : State = {
     sendAckForItem()
@@ -199,9 +211,9 @@ final class TaskFSM
       .timestamp(new Date())
       .build()
 
-    log.debug(s"Publishing to queue ${ rabbit.replyTo } : ${ response.toString }")
+    log.debug(s"Publishing to queue ${ rabbit.replyToQueue } : ${ response.toString }")
 
-    (rabbit.channel ? Publish("", rabbit.replyTo, body, Some(props))).collect {
+    (rabbit.channel ? Publish("", rabbit.replyToQueue, body, Some(props))).collect {
       case Ok(_, _) =>
         log.debug("Successfully published work response to result queue")
       case Error(_, cause) =>

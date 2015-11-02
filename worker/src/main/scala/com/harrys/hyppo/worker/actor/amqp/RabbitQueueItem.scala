@@ -2,20 +2,20 @@ package com.harrys.hyppo.worker.actor.amqp
 
 import akka.actor.ActorRef
 import com.github.sstone.amqp.Amqp.{Ack, Reject}
-import com.rabbitmq.client.{BasicProperties, Envelope, GetResponse}
+import com.rabbitmq.client.{Envelope, GetResponse}
 
 /**
  * Created by jpetty on 9/21/15.
  */
 final case class RabbitQueueItem(channel: ActorRef, response: GetResponse) {
 
-  def envelope: Envelope = response.getEnvelope
+  final val properties: HyppoMessageProperties = AMQPMessageProperties.parseItemProperties(response.getProps)
 
-  def properties: BasicProperties = response.getProps
+  def envelope: Envelope = response.getEnvelope
 
   def deliveryTag: Long = envelope.getDeliveryTag
 
-  def replyTo: String = properties.getReplyTo
+  def replyToQueue: String = properties.replyToQueue
 
   def printableDetails: String = {
     s"${this.productPrefix}(exchange=${envelope.getExchange} routingKey=${envelope.getRoutingKey} deliveryTag=${deliveryTag})"

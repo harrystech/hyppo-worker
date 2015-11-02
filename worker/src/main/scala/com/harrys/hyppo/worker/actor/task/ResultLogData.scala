@@ -18,4 +18,8 @@ final case class ResultLogData(subTasksTotal: Int, resultsSent: Int = 0, logsUpl
   def hasMoreResultsPending: Boolean = pendingResults > 0
 
   def hasMoreLogsPending: Boolean = pendingLogFiles > 0
+
+  def inspect: String = {
+    s"total=${ subTasksTotal } resultsSent=${ resultsSent } logsUploaded=${ logsUploaded }"
+  }
 }
