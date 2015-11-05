@@ -10,13 +10,11 @@ import scala.util.Try
 /**
  * Created by jpetty on 9/17/15.
  */
-class QueueProxyActorTests extends RabbitMQTests  {
-
-  override val config = new CoordinatorConfig(TestConfig.basicTestConfig)
+class QueueProxyActorTests extends RabbitMQTests(new CoordinatorConfig(TestConfig.basicTestConfig))  {
 
 
   "The Queue Proxy" must {
-    val proxy = TestActorRef(new RabbitWorkQueueProxy(config, connection))
+    val proxy = TestActorRef(new EnqueueWorkQueueProxy(config, connection))
 
     "successfully enqueue messages" in {
       val source      =  TestObjects.testIngestionSource(name = "queue proxy")

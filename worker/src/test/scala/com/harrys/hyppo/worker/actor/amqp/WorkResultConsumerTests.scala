@@ -13,9 +13,8 @@ import scala.concurrent.Await
 /**
  * Created by jpetty on 9/17/15.
  */
-class WorkResultConsumerTests extends RabbitMQTests {
+class WorkResultConsumerTests extends RabbitMQTests(new CoordinatorConfig(TestConfig.basicTestConfig)) {
 
-  override val config  = new CoordinatorConfig(TestConfig.basicTestConfig)
   val handler = new WorkResponseHandler {
     override def onIngestionTasksCreated(created: CreateIngestionTasksResponse): Unit = {}
 

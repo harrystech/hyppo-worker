@@ -6,9 +6,8 @@ import com.harrys.hyppo.worker.TestConfig
 /**
  * Created by jpetty on 11/3/15.
  */
-class QueueCreationTests extends RabbitMQTests  {
+class QueueCreationTests extends RabbitMQTests(new CoordinatorConfig(TestConfig.basicTestConfig))  {
 
-  override val config = new CoordinatorConfig(TestConfig.basicTestConfig)
   val rabbitMQ = config.rabbitMQConnectionFactory.newConnection()
 
   override def localTestCleanup() : Unit = {

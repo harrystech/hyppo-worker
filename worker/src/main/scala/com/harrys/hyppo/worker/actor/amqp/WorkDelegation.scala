@@ -34,8 +34,6 @@ final class WorkDelegation(config: WorkerConfig, connection: ActorRef) extends A
   def shutdownImminent: Receive = {
     case request: RequestForWork =>
       log.debug("Ignoring worker request for work. Shutdown is imminent")
-    case _ @ IncrementalQueueUpdate =>
-      log.debug("Ignoring incremental update. Shutdown is imminent")
   }
 
 
@@ -44,9 +42,7 @@ final class WorkDelegation(config: WorkerConfig, connection: ActorRef) extends A
       currentStats = update.map(i => i.name -> i).toMap
 
     case IncrementalQueueUpdate(name, size) =>
-      if (naming.generalQueueName == name){
-        log.debug(s"Ignoring incremental update for general work queue $name")
-      } else {
+      if (naming.isIntegrationQueueName(name)){
         log.debug(s"Performing incremental update for queue $name to size $size")
         currentStats.get(name) match {
           case Some(info) => currentStats += name -> info.copy(size = size)
@@ -59,9 +55,9 @@ final class WorkDelegation(config: WorkerConfig, connection: ActorRef) extends A
       log.debug(s"Received ${request.toString} from worker $worker")
       request match {
         case RequestForPreferredWork(prefer) =>
-          channelActor ! ChannelMessage((c: Channel) => nextItemOfPreferredWork(c, worker, prefer))
+          channelActor ! ChannelMessage(c => nextItemOfPreferredWork(c, worker, prefer))
         case RequestForAnyWork =>
-          channelActor ! ChannelMessage((c: Channel) => nextItemOfAnyWork(c, worker))
+          channelActor ! ChannelMessage(c => nextItemOfAnyWork(c, worker))
       }
 
     case Lifecycle.ImpendingShutdown =>

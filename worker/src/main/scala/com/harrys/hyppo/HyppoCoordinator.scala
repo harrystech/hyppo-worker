@@ -7,7 +7,7 @@ import akka.pattern.gracefulStop
 import com.harrys.hyppo.config.CoordinatorConfig
 import com.harrys.hyppo.coordinator.{WorkDispatcher, WorkResponseHandler}
 import com.harrys.hyppo.util.ConfigUtils
-import com.harrys.hyppo.worker.actor.amqp.{QueueStatusInfo, RabbitWorkQueueProxy, ResponseQueueConsumer}
+import com.harrys.hyppo.worker.actor.amqp.{EnqueueWorkQueueProxy, QueueStatusInfo, ResponseQueueConsumer}
 import com.harrys.hyppo.worker.api.proto.WorkerInput
 import com.thenewmotion.akka.rabbitmq.ConnectionActor
 import com.typesafe.config.Config
@@ -22,7 +22,7 @@ final class HyppoCoordinator @Singleton() @Inject() (system: ActorSystem, config
   private val rabbitMQApi     = config.newRabbitMQApiClient()
   private val connectionActor = system.actorOf(ConnectionActor.props(config.rabbitMQConnectionFactory, reconnectionDelay = config.rabbitMQTimeout), name = "rabbitmq")
   private val responseActor   = system.actorOf(Props(classOf[ResponseQueueConsumer], config, connectionActor, handler), name = "responses")
-  private val enqueueProxy    = system.actorOf(Props(classOf[RabbitWorkQueueProxy], config, connectionActor), name = "enqueue-proxy")
+  private val enqueueProxy    = system.actorOf(Props(classOf[EnqueueWorkQueueProxy], config, connectionActor), name = "enqueue-proxy")
 
 
   system.registerOnTermination({

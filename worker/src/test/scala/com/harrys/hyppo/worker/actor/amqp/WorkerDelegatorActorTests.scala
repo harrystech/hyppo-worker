@@ -15,9 +15,7 @@ import scala.util.Try
 /**
  * Created by jpetty on 9/16/15.
  */
-class WorkerDelegatorActorTests extends RabbitMQTests  {
-
-  override val config = new WorkerConfig(TestConfig.basicTestConfig)
+class WorkerDelegatorActorTests extends RabbitMQTests(new WorkerConfig(TestConfig.basicTestConfig))  {
 
   "The WorkDelegator" must {
 

@@ -10,7 +10,7 @@ import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 /**
  * Created by jpetty on 9/16/15.
  */
-abstract class RabbitMQTests extends TestKit(ActorSystem("TestActorSystem", TestConfig.basicTestConfig)) with WordSpecLike with BeforeAndAfterAll with Matchers with ImplicitSender {
+abstract class RabbitMQTests[T <: HyppoConfig](final val config: T) extends TestKit(ActorSystem("TestActorSystem", TestConfig.basicTestConfig)) with WordSpecLike with BeforeAndAfterAll with Matchers with ImplicitSender {
 
   final override def afterAll() : Unit = {
     try {
@@ -20,12 +20,10 @@ abstract class RabbitMQTests extends TestKit(ActorSystem("TestActorSystem", Test
     }
   }
 
-  def config: HyppoConfig
-
   def localTestCleanup() : Unit = {}
 
-  final lazy val connection = TestActorRef(ConnectionActor.props(config.rabbitMQConnectionFactory))
-  final lazy val naming  = new QueueNaming(config)
-  final lazy val helpers = new QueueHelpers(config, naming)
+  final val connection = TestActorRef(ConnectionActor.props(config.rabbitMQConnectionFactory))
+  final val naming  = new QueueNaming(config)
+  final val helpers = new QueueHelpers(config, naming)
 
 }

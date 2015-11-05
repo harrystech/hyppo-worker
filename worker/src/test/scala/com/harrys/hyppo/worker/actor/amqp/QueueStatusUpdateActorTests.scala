@@ -8,9 +8,7 @@ import com.harrys.hyppo.worker.TestConfig
 /**
  * Created by jpetty on 9/16/15.
  */
-class QueueStatusUpdateActorTests extends RabbitMQTests {
-
-  override val config = new WorkerConfig(TestConfig.basicTestConfig)
+class QueueStatusUpdateActorTests extends RabbitMQTests(new WorkerConfig(TestConfig.basicTestConfig)) {
 
   "The QueueStatusActor" must {
     val status = TestActorRef(new RabbitQueueStatusActor(config, self))

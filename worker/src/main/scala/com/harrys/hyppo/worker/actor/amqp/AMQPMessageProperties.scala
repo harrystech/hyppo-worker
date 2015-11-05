@@ -4,6 +4,7 @@ import java.time._
 import java.util.UUID
 
 import com.harrys.hyppo.util.TimeUtils
+import com.harrys.hyppo.worker.actor.amqp.WorkerResources.ThrottledWorkerResource
 import com.rabbitmq.client.AMQP.BasicProperties
 
 /**
@@ -56,6 +57,14 @@ object AMQPMessageProperties {
       .build()
   }
 
+  def throttleTokenProperties(resource: ThrottledWorkerResource) : BasicProperties = {
+    val timeout = Math.max(resource.throttleRate.toMillis, 1L)
+    new BasicProperties.Builder()
+      .contentType(SerializationMimeType)
+      .timestamp(TimeUtils.currentLegacyDate())
+      .expiration(timeout.toString)
+      .build()
+  }
 
   def parseItemProperties(properties: BasicProperties) : HyppoMessageProperties = {
     val replyQueue  = properties.getReplyTo

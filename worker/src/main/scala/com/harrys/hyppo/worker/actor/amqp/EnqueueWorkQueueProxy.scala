@@ -10,7 +10,7 @@ import com.thenewmotion.akka.rabbitmq._
 /**
  * Created by jpetty on 9/16/15.
  */
-final class RabbitWorkQueueProxy(config: CoordinatorConfig, connection: ActorRef) extends Actor with ActorLogging {
+final class EnqueueWorkQueueProxy(config: CoordinatorConfig, connection: ActorRef) extends Actor with ActorLogging {
 
   val serializer   = new AMQPSerialization(context)
   val queueNaming  = new QueueNaming(config)

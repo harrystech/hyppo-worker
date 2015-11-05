@@ -1,6 +1,6 @@
 package com.harrys.hyppo.worker.actor.sync
 
-import com.harrys.hyppo.worker.actor.amqp.Resources._
+import com.harrys.hyppo.worker.actor.amqp.WorkerResources._
 
 
 /**
@@ -8,7 +8,7 @@ import com.harrys.hyppo.worker.actor.amqp.Resources._
  */
 object ResourceNegotiation {
 
-  final case class RequestForResources(resources: Seq[Resource])
+  final case class RequestForResources(resources: Seq[WorkerResource])
 
   final case class ReleaseResources(resources: Seq[ResourceLease])
 
@@ -16,7 +16,7 @@ object ResourceNegotiation {
 
   final case class AcquiredResourceLeases(leases: Seq[ResourceLease]) extends ResourceAcquisitionResult
 
-  final case class ResourceUnavailable(unavailable: Resource) extends ResourceAcquisitionResult {
+  final case class ResourceUnavailable(unavailable: WorkerResource) extends ResourceAcquisitionResult {
     def resourceName: String = unavailable.resourceName
   }
 

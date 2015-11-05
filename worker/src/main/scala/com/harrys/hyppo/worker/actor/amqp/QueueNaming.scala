@@ -1,5 +1,6 @@
 package com.harrys.hyppo.worker.actor.amqp
 
+import java.time.Duration
 import java.util.regex.Pattern
 
 import com.harrys.hyppo.config.HyppoConfig
@@ -28,21 +29,21 @@ final class QueueNaming(config: HyppoConfig) {
   }
 
   private val concurrencyResourcePrefix: String = s"$prefix.resource.concurrency"
-  def concurrencyResource(resourceName: String, concurrency: Int) : Resources.ConcurrencyResource = {
+  def concurrencyResource(resourceName: String, concurrency: Int) : WorkerResources.ConcurrencyWorkerResource = {
     if (concurrency <= 0){
       throw new IllegalArgumentException(s"Concurrency resources must have a concurrency value of 1 or more. Provided: $concurrency")
     }
     val nameFix   = sanitizeName(resourceName)
     val queueName = s"$concurrencyResourcePrefix.$nameFix-$concurrency"
-    Resources.ConcurrencyResource(resourceName, queueName, concurrency)
+    WorkerResources.ConcurrencyWorkerResource(resourceName, queueName, concurrency)
   }
 
   private val throttledResourcePrefix: String = s"$prefix.resource.throttled"
-  def throttledResource(resourceName: String) : Resources.ThrottledResource = {
+  def throttledResource(resourceName: String, throttle: Duration) : WorkerResources.ThrottledWorkerResource = {
     val nameFix   = sanitizeName(resourceName)
     val deferred  = s"$throttledResourcePrefix.defer.$nameFix"
     val available = s"$throttledResourcePrefix.ready.$nameFix"
-    Resources.ThrottledResource(resourceName, deferred, available)
+    WorkerResources.ThrottledWorkerResource(resourceName, deferred, available, throttle)
   }
 
   private val cleanupPattern: Pattern = Pattern.compile("\\s")
