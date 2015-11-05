@@ -1,9 +1,7 @@
 package com.harrys.hyppo.worker.actor
 
 import akka.actor._
-import akka.pattern.{ask, gracefulStop}
-import akka.util.Timeout
-import com.github.sstone.amqp.Amqp.{Error, Ok}
+import akka.pattern.gracefulStop
 import com.harrys.hyppo.Lifecycle
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.actor.WorkerFSM._
@@ -54,12 +52,12 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
 
     case Event(Failure(cause), WaitingForJars(work)) =>
       log.debug("Failed to load code for commander", cause)
-      sendNackToWorkItem(work)
+      rejectWorkItem(work)
       goto(Idle) using Uninitialized
 
     case Event(StateTimeout, WaitingForJars(work)) =>
       log.debug("Code loading timed out")
-      sendNackToWorkItem(work)
+      rejectWorkItem(work)
       goto(Idle) using Uninitialized
   }
 
@@ -194,16 +192,8 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
     }
   }
 
-  def sendNackToWorkItem(item: WorkQueueItem) : Unit = {
-    import context.dispatcher
-    implicit val timeout = Timeout(config.rabbitMQTimeout)
-    (item.rabbitItem.channel ? item.rabbitItem.createNack(requeue = true)).collect {
-      case Ok(_, _) =>
-        log.debug("Successfully sent NACK to Rabbit")
-      case Error(_, cause) =>
-        log.error(cause, "Failed to NACK work queue item")
-        self ! Failure(cause)
-    }
+  def rejectWorkItem(item: WorkQueueItem) : Unit = {
+    item.rabbitItem.sendReject()
   }
 }
 

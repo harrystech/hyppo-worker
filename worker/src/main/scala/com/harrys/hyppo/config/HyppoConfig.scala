@@ -37,6 +37,12 @@ abstract class HyppoConfig(config: Config) extends Serializable {
   //  Timeout duration on operations involving rabbitmq
   final val rabbitMQTimeout: FiniteDuration = Duration(config.getDuration("hyppo.rabbitmq.timeout").toMillis, MILLISECONDS)
 
+  //  Value to prefix all queue names with
+  final val workQueuePrefix: String = config.getString("hyppo.work-queue.base-prefix")
+
+  //  Amount of time to allow queues to linger in an inactive state
+  final val workQueueTTL: FiniteDuration = Duration(config.getDuration("hyppo.work-queue.queue-ttl").toMillis, MILLISECONDS)
+
   //  Creates a rabbitMQ connection factory
   final def rabbitMQConnectionFactory: ConnectionFactory = {
     val factory = new ConnectionFactory()

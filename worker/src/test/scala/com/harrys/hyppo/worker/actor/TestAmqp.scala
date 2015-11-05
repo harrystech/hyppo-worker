@@ -44,5 +44,4 @@ object TestAmqp extends MockitoSugar {
   def fakeWorkQueueItem(channel: ActorRef, input: WorkerInput)(implicit system: ActorSystem) : WorkQueueItem = {
     WorkQueueItem(fakeRabbitQueueItem(channel, input), input)
   }
-
 }

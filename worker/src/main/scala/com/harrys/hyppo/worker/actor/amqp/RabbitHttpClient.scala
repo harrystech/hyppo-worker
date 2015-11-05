@@ -4,6 +4,7 @@ import java.net.URLEncoder
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
+import com.harrys.hyppo.util.TimeUtils
 import com.rabbitmq.client.ConnectionFactory
 import com.typesafe.scalalogging.Logger
 import org.apache.commons.io.IOUtils
@@ -46,7 +47,7 @@ final class RabbitHttpClient(server: ConnectionFactory, port: Int, useSSL: Boole
           val size = (queue \ "messages").extract[Option[Int]].getOrElse(0)
           val rate = (queue \ "messages_details" \ "rate").extract[Option[Double]].getOrElse(0.0)
           val idle = (queue \ "idle_since").extract[Option[String]].map(LocalDateTime.parse(_, format))
-          QueueStatusInfo(name, size, rate, idle.getOrElse(LocalDateTime.now()))
+          QueueStatusInfo(name, size, rate, idle.getOrElse(TimeUtils.currentLocalDateTime()))
         } catch {
           case e: Exception =>
             throw new Exception(s"Failed to parse expected RabbitMQ structure from: ${compact(queue)}", e)

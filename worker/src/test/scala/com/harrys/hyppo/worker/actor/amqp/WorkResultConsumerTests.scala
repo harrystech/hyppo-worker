@@ -15,8 +15,7 @@ import scala.concurrent.Await
  */
 class WorkResultConsumerTests extends RabbitMQTests {
 
-  val config = new CoordinatorConfig(TestConfig.basicTestConfig)
-
+  override val config  = new CoordinatorConfig(TestConfig.basicTestConfig)
   val handler = new WorkResponseHandler {
     override def onIngestionTasksCreated(created: CreateIngestionTasksResponse): Unit = {}
 
@@ -34,7 +33,7 @@ class WorkResultConsumerTests extends RabbitMQTests {
   }
 
   "The WorkResultConsumer" must {
-    val consumer = TestActorRef(new RabbitResponseQueueConsumer(config, handler))
+    val consumer = TestActorRef(new ResponseQueueConsumer(config, connection, handler))
 
     "gracefully shutdown when told" in {
       val future = gracefulStop(consumer, config.rabbitMQTimeout, Lifecycle.ImpendingShutdown)

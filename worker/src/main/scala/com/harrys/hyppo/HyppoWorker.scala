@@ -5,7 +5,8 @@ import akka.pattern.gracefulStop
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.util.ConfigUtils
 import com.harrys.hyppo.worker.actor.WorkerFSM
-import com.harrys.hyppo.worker.actor.amqp.{RabbitQueueStatusActor, RabbitWorkerDelegation}
+import com.harrys.hyppo.worker.actor.amqp.{RabbitQueueStatusActor, WorkDelegation}
+import com.thenewmotion.akka.rabbitmq.ConnectionActor
 import com.typesafe.config.Config
 
 import scala.concurrent.duration._
@@ -18,7 +19,8 @@ final class HyppoWorker(val system: ActorSystem, val settings: WorkerConfig) {
 
   def this(system: ActorSystem, config: Config) = this(system, new WorkerConfig(config))
 
-  val delegation = system.actorOf(Props(classOf[RabbitWorkerDelegation], settings), "delegation")
+  val connection = system.actorOf(ConnectionActor.props(settings.rabbitMQConnectionFactory, reconnectionDelay = settings.rabbitMQTimeout), name = "rabbitmq")
+  val delegation = system.actorOf(Props(classOf[WorkDelegation], settings, connection), "delegation")
   val queueStats = system.actorOf(Props(classOf[RabbitQueueStatusActor], settings, delegation), "queue-stats")
   val workerFSMs = (1 to settings.workerCount).inclusive.map(i => {
     system.actorOf(Props(classOf[WorkerFSM], settings, delegation), "worker-%02d".format(i))

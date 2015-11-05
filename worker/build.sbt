@@ -2,6 +2,8 @@ name := "worker"
 
 val AkkaVersion = "2.3.11"
 
+resolvers += "The New Motion Public Repo" at "http://nexus.thenewmotion.com/content/groups/public/"
+
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-actor"  % AkkaVersion,     // Akka actors
   "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",  // scala logging API
@@ -12,7 +14,7 @@ libraryDependencies ++= Seq(
   "commons-io"        %  "commons-io"      % "2.4",           // Handy utils for IO stuff
   "ch.qos.logback"    %  "logback-classic" % "1.1.3",         // Logging API implementation
   "com.google.code.findbugs" % "jsr305" % "3.0.0",            // Compile time checks based on annotations
-  "com.github.sstone" %% "amqp-client" % "1.5",               // RabbitMQ client for work negotiation
+  "com.thenewmotion.akka" %% "akka-rabbitmq" % "1.2.4",        // RabbitMQ client for work negotiation
   "org.apache.httpcomponents" % "httpclient" % "4.5",          // HTTP client for RabbitMQ management API
   "javax.inject" % "javax.inject" % "1",
   "com.amazonaws" %  "aws-java-sdk-s3" % "1.10.2"        // Reading / writing to S3

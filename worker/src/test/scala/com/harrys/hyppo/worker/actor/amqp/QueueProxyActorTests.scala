@@ -12,11 +12,11 @@ import scala.util.Try
  */
 class QueueProxyActorTests extends RabbitMQTests  {
 
-  val config = new CoordinatorConfig(TestConfig.basicTestConfig)
+  override val config = new CoordinatorConfig(TestConfig.basicTestConfig)
 
 
   "The Queue Proxy" must {
-    val proxy = TestActorRef(new RabbitWorkQueueProxy(config))
+    val proxy = TestActorRef(new RabbitWorkQueueProxy(config, connection))
 
     "successfully enqueue messages" in {
       val source      =  TestObjects.testIngestionSource(name = "queue proxy")
@@ -24,7 +24,7 @@ class QueueProxyActorTests extends RabbitMQTests  {
       val work        = CreateIngestionTasksRequest(integration, TestObjects.testIngestionJob(source))
       val connection  = config.rabbitMQConnectionFactory.newConnection()
       val channel     = connection.createChannel()
-      val queueName   = HyppoQueue.integrationQueueName(integration)
+      val queueName   = naming.integrationQueueName(integration)
 
       try {
         channel.queueDelete(queueName)

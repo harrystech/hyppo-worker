@@ -2,14 +2,13 @@ package com.harrys.hyppo.worker.actor.task
 
 import akka.actor.Terminated
 import akka.testkit.{TestFSMRef, TestProbe}
-import com.github.sstone.amqp.Amqp
-import com.github.sstone.amqp.Amqp.{Ack, Publish}
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.source.api.PersistingSemantics
 import com.harrys.hyppo.worker.actor.task.TaskFSMStatus.{PerformingOperation, PreparingToStart, UploadingLogs}
 import com.harrys.hyppo.worker.actor.{TestAmqp, WorkerFSMTests}
 import com.harrys.hyppo.worker.api.proto._
 import com.harrys.hyppo.worker.{TestConfig, TestObjects}
+import com.thenewmotion.akka.rabbitmq.ChannelActor.ChannelMessage
 import org.scalatest.mock.MockitoSugar
 
 /**
@@ -49,8 +48,7 @@ class TaskFSMTests extends WorkerFSMTests with MockitoSugar {
         val fakeTasks = Seq(TestObjects.testIngestionTask(testJob))
         taskFSM ! TaskFSMEvent.OperationResultAvailable(CreateIngestionTasksResponse(testInput, RemoteLogFile(config.dataBucketName, ""), fakeTasks))
         taskFSM.stateName should equal(UploadingLogs)
-        val ack = fakeChannel.expectMsgClass(classOf[Ack])
-        fakeChannel.reply(Amqp.Ok(ack, None))
+        fakeChannel.expectMsgClass(classOf[ChannelMessage])
       }
 
       "transition and stop once the logs finish uploading" in {
@@ -78,15 +76,13 @@ class TaskFSMTests extends WorkerFSMTests with MockitoSugar {
       "ack immediately and transition appropriately when the operation starts" in {
         commander.send(taskFSM, TaskFSMEvent.OperationStarting)
         taskFSM.stateName should equal(PerformingOperation)
-        val ack = channel.expectMsgClass(classOf[Ack])
-        channel.reply(Amqp.Ok(ack, None))
+        channel.expectMsgClass(classOf[ChannelMessage])
       }
 
       "transition again once the results arrive" in {
         val fakeResult = PersistProcessedDataResponse(testInput, RemoteLogFile(config.dataBucketName, ""), fakeSingle)
         commander.send(taskFSM, TaskFSMEvent.OperationResultAvailable(fakeResult))
-        val publish = channel.expectMsgClass(classOf[Publish])
-        channel.reply(Amqp.Ok(publish, None))
+        channel.expectMsgClass(classOf[ChannelMessage])
         taskFSM.stateName should equal(UploadingLogs)
       }
 

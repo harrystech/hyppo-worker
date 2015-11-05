@@ -1,11 +1,6 @@
 package com.harrys.hyppo.worker.actor.task
 
-import java.util.Date
-
 import akka.actor.{ActorRef, FSM, LoggingFSM, Terminated}
-import akka.pattern.ask
-import akka.util.Timeout
-import com.github.sstone.amqp.Amqp.{Error, Ok, Publish}
 import com.harrys.hyppo.Lifecycle.ImpendingShutdown
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.source.api.PersistingSemantics
@@ -13,7 +8,6 @@ import com.harrys.hyppo.worker.actor.amqp.{AMQPSerialization, RabbitQueueItem, W
 import com.harrys.hyppo.worker.actor.task.TaskFSMEvent.{OperationLogUploaded, OperationResultAvailable, OperationStarting}
 import com.harrys.hyppo.worker.actor.task.TaskFSMStatus.{PerformingOperation, PreparingToStart, UploadingLogs}
 import com.harrys.hyppo.worker.api.proto.{FailureResponse, PersistProcessedDataRequest, WorkerResponse}
-import com.rabbitmq.client.AMQP.BasicProperties
 
 /**
  * Created by jpetty on 10/29/15.
@@ -175,49 +169,20 @@ final class TaskFSM
   }
 
   def sendAckForItem(): Unit = if (!hasSentAck) {
-    import context.dispatcher
-    implicit val timeout = Timeout(config.rabbitMQTimeout)
     //  Acks only fire once.
     hasSentAck = true
-
-    (rabbit.channel ? rabbit.createAck()).collect {
-      case Ok(_, _) =>
-        log.debug(s"Successfully ACK'ed delivery tag: ${ rabbit.deliveryTag }")
-      case Error(_, cause) =>
-        log.error(cause, s"Failed to ACK delivery tag: ${ rabbit.deliveryTag }")
-    }
+    rabbit.sendAck()
   }
 
   def sendRejectionForItem(requeue: Boolean = true) : Unit = if (!hasSentAck) {
-    import context.dispatcher
-    implicit val timeout = Timeout(config.rabbitMQTimeout)
     //  Acks only fire once.
     hasSentAck = true
-
-    (rabbit.channel ? rabbit.createNack(requeue = requeue)).collect {
-      case Ok(_, _) =>
-        log.debug(s"Successfully ACK'ed delivery tag: ${ rabbit.deliveryTag }")
-      case Error(_, cause) =>
-        log.error(cause, s"Failed to ACK delivery tag: ${ rabbit.deliveryTag }")
-    }
+    rabbit.sendReject()
   }
 
   def publishWorkResponse(response: WorkerResponse) : Unit = {
-    import context.dispatcher
-    implicit val timeout = Timeout(config.rabbitMQTimeout)
-
     val body  = serialization.serialize(response)
-    val props = new BasicProperties.Builder()
-      .timestamp(new Date())
-      .build()
-
     log.debug(s"Publishing to queue ${ rabbit.replyToQueue } : ${ response.toString }")
-
-    (rabbit.channel ? Publish("", rabbit.replyToQueue, body, Some(props))).collect {
-      case Ok(_, _) =>
-        log.debug("Successfully published work response to result queue")
-      case Error(_, cause) =>
-        log.error(cause, "Failed to publish work response to result queue. This may result in duplicated work and inconsistent data!")
-    }
+    rabbit.publishReply(body)
   }
 }
