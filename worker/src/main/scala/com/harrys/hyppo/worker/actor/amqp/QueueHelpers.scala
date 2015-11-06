@@ -3,8 +3,7 @@ package com.harrys.hyppo.worker.actor.amqp
 import java.io.IOException
 
 import com.harrys.hyppo.config.HyppoConfig
-import com.harrys.hyppo.worker.actor.amqp.WorkerResources.{ConcurrencyWorkerResource, ThrottledWorkerResource}
-import com.harrys.hyppo.worker.api.code.ExecutableIntegration
+import com.harrys.hyppo.worker.api.proto.{IntegrationWorkerInput, ThrottledWorkResource, ConcurrencyWorkResource}
 import com.rabbitmq.client.{AMQP, Channel, Connection, ShutdownSignalException}
 
 import scala.collection.JavaConversions
@@ -53,8 +52,8 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     channel.queueDeclare(naming.generalQueueName, durable, exclusive, autoDelete, JavaConversions.mapAsJavaMap(arguments))
   }
 
-  def createIntegrationQueue(channel: Channel, integration: ExecutableIntegration) : AMQP.Queue.DeclareOk = {
-    val queueName  = naming.integrationQueueName(integration)
+  def createIntegrationQueue(channel: Channel, input: IntegrationWorkerInput) : AMQP.Queue.DeclareOk = {
+    val queueName  = naming.integrationWorkQueueName(input)
     val durable    = true
     val exclusive  = false
     val autoDelete = false
@@ -66,7 +65,7 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     channel.queueDeclare(queueName, durable, exclusive, autoDelete, JavaConversions.mapAsJavaMap(arguments))
   }
 
-  def createConcurrencyResource(resource: ConcurrencyWorkerResource) : ConcurrencyWorkerResource = {
+  def createConcurrencyResource(resource: ConcurrencyWorkResource) : ConcurrencyWorkResource = {
     val connection = config.rabbitMQConnectionFactory.newConnection()
     try {
       createConcurrencyResource(connection, resource)
@@ -75,7 +74,7 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     }
   }
 
-  def createConcurrencyResource(connection: Connection, resource: ConcurrencyWorkerResource) : ConcurrencyWorkerResource = {
+  def createConcurrencyResource(connection: Connection, resource: ConcurrencyWorkResource) : ConcurrencyWorkResource = {
     passiveQueueDeclaration(connection, resource.queueName) match {
       case Some(declare) =>
         resource
@@ -97,7 +96,7 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     }
   }
 
-  def createThrottledResource(resource: ThrottledWorkerResource) : ThrottledWorkerResource = {
+  def createThrottledResource(resource: ThrottledWorkResource) : ThrottledWorkResource = {
     val connection = config.rabbitMQConnectionFactory.newConnection()
     try {
       createThrottledResource(connection, resource)
@@ -106,7 +105,7 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     }
   }
 
-  def createThrottledResource(connection: Connection, resource: ThrottledWorkerResource) : ThrottledWorkerResource = {
+  def createThrottledResource(connection: Connection, resource: ThrottledWorkResource) : ThrottledWorkResource = {
     val availableDeclare = passiveQueueDeclaration(connection, resource.availableQueueName)
     val deferredDeclare  = passiveQueueDeclaration(connection, resource.deferredQueueName)
     (availableDeclare, deferredDeclare) match {
@@ -128,7 +127,7 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     }
   }
 
-  def destroyConcurrencyResource(resource: ConcurrencyWorkerResource) : Unit = {
+  def destroyConcurrencyResource(resource: ConcurrencyWorkResource) : Unit = {
     val connection = config.rabbitMQConnectionFactory.newConnection()
     try {
       destroyConcurrencyResource(connection, resource)
@@ -137,7 +136,7 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     }
   }
 
-  def destroyConcurrencyResource(connection: Connection, resource: ConcurrencyWorkerResource) : AMQP.Queue.DeleteOk = {
+  def destroyConcurrencyResource(connection: Connection, resource: ConcurrencyWorkResource) : AMQP.Queue.DeleteOk = {
     val channel = connection.createChannel()
     try {
       channel.queueDelete(resource.queueName)
@@ -146,7 +145,7 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     }
   }
 
-  def destroyThrottledResource(resource: ThrottledWorkerResource) : (AMQP.Queue.DeleteOk, AMQP.Queue.DeleteOk) = {
+  def destroyThrottledResource(resource: ThrottledWorkResource) : (AMQP.Queue.DeleteOk, AMQP.Queue.DeleteOk) = {
     val connection = config.rabbitMQConnectionFactory.newConnection()
     try {
       destroyThrottledResource(connection, resource)
@@ -155,7 +154,7 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     }
   }
 
-  def destroyThrottledResource(connection: Connection, resource: ThrottledWorkerResource) : (AMQP.Queue.DeleteOk, AMQP.Queue.DeleteOk) = {
+  def destroyThrottledResource(connection: Connection, resource: ThrottledWorkResource) : (AMQP.Queue.DeleteOk, AMQP.Queue.DeleteOk) = {
     val channel = connection.createChannel()
     try {
       val available = channel.queueDelete(resource.availableQueueName)
@@ -196,7 +195,7 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     case _ => false
   }
 
-  private def createThrottledQueues(channel: Channel, resource: ThrottledWorkerResource) : (AMQP.Queue.DeclareOk, AMQP.Queue.DeclareOk) = {
+  private def createThrottledQueues(channel: Channel, resource: ThrottledWorkResource) : (AMQP.Queue.DeclareOk, AMQP.Queue.DeclareOk) = {
     val durable      = true
     val exclusive    = false
     val autoDelete   = false
@@ -209,7 +208,7 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     (availableOk, deferredOk)
   }
 
-  private def populateConcurrencyResource(channel: Channel, resource: ConcurrencyWorkerResource) : Unit = {
+  private def populateConcurrencyResource(channel: Channel, resource: ConcurrencyWorkResource) : Unit = {
     channel.confirmSelect()
     (1 to resource.concurrency).inclusive.foreach { i =>
       channel.basicPublish(directExchange, resource.queueName, true, false, null, Array[Byte]())

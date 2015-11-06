@@ -45,7 +45,7 @@ class WorkerDelegatorActorTests extends RabbitMQTests(new WorkerConfig(TestConfi
       val connection  = config.rabbitMQConnectionFactory.newConnection()
       val channel     = connection.createChannel()
 
-      val queueName  = naming.integrationQueueName(integration)
+      val queueName  = naming.integrationQueueBaseName(integration)
       val properties = AMQPMessageProperties.enqueueProperties(UUID.randomUUID(), queueName, Duration(5, SECONDS))
       channel.queueDelete(queueName)
       channel.queueDeclare(queueName, false, false, false, null)

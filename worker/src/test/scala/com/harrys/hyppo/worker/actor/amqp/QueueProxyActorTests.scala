@@ -22,7 +22,7 @@ class QueueProxyActorTests extends RabbitMQTests(new CoordinatorConfig(TestConfi
       val work        = CreateIngestionTasksRequest(integration, TestObjects.testIngestionJob(source))
       val connection  = config.rabbitMQConnectionFactory.newConnection()
       val channel     = connection.createChannel()
-      val queueName   = naming.integrationQueueName(integration)
+      val queueName   = naming.integrationQueueBaseName(integration)
 
       try {
         channel.queueDelete(queueName)

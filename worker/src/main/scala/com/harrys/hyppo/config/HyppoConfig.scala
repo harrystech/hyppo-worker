@@ -43,6 +43,14 @@ abstract class HyppoConfig(config: Config) extends Serializable {
   //  Amount of time to allow queues to linger in an inactive state
   final val workQueueTTL: FiniteDuration = Duration(config.getDuration("hyppo.work-queue.queue-ttl").toMillis, MILLISECONDS)
 
+  //  The amount of time to allow for a graceful stop before forced termination
+  final val shutdownTimeout: FiniteDuration = Duration(config.getDuration("hyppo.shutdown-timeout").toMillis, MILLISECONDS)
+
+  /**
+    * fractional amount of the [[shutdownTimeout]] that a single worker is allowed to wait before terminating
+    */
+  final val workerShutdownTimeout: FiniteDuration = Duration(shutdownTimeout.mul(0.8).toMillis, MILLISECONDS)
+
   //  Creates a rabbitMQ connection factory
   final def rabbitMQConnectionFactory: ConnectionFactory = {
     val factory = new ConnectionFactory()

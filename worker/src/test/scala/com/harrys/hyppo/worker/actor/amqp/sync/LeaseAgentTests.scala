@@ -6,7 +6,8 @@ import akka.testkit.TestActorRef
 import com.harrys.hyppo.util.TimeUtils
 import com.harrys.hyppo.worker.TestConfig
 import com.harrys.hyppo.worker.actor.amqp.RabbitMQTests
-import com.harrys.hyppo.worker.actor.sync.{ResourceLeaseAgent, ResourceNegotiation, ThrottledResourceLease}
+import com.harrys.hyppo.worker.actor.queue.ThrottledResourceLease
+import com.harrys.hyppo.worker.actor.sync.{ResourceLeaseAgent, ResourceNegotiation}
 import org.scalatest.concurrent.Eventually
 
 import scala.util.Try

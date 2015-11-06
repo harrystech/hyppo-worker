@@ -1,5 +1,6 @@
 package com.harrys.hyppo.worker.actor.task
 
+import akka.actor.ActorRef
 import com.harrys.hyppo.worker.api.proto.WorkerResponse
 
 /**

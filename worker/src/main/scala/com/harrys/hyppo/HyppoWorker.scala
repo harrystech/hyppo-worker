@@ -6,6 +6,7 @@ import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.util.ConfigUtils
 import com.harrys.hyppo.worker.actor.WorkerFSM
 import com.harrys.hyppo.worker.actor.amqp.{RabbitQueueStatusActor, WorkDelegation}
+import com.harrys.hyppo.worker.actor.sync.ResourceLeaseAgent
 import com.thenewmotion.akka.rabbitmq.ConnectionActor
 import com.typesafe.config.Config
 
@@ -20,6 +21,7 @@ final class HyppoWorker(val system: ActorSystem, val settings: WorkerConfig) {
   def this(system: ActorSystem, config: Config) = this(system, new WorkerConfig(config))
 
   val connection = system.actorOf(ConnectionActor.props(settings.rabbitMQConnectionFactory, reconnectionDelay = settings.rabbitMQTimeout), name = "rabbitmq")
+  val leaseActor = system.actorOf(Props(classOf[ResourceLeaseAgent], settings, connection), "lease-actor")
   val delegation = system.actorOf(Props(classOf[WorkDelegation], settings, connection), "delegation")
   val queueStats = system.actorOf(Props(classOf[RabbitQueueStatusActor], settings, delegation), "queue-stats")
   val workerFSMs = (1 to settings.workerCount).inclusive.map(i => {
@@ -28,10 +30,12 @@ final class HyppoWorker(val system: ActorSystem, val settings: WorkerConfig) {
 
   system.registerOnTermination({
     delegation ! Lifecycle.ImpendingShutdown
+    leaseActor ! Lifecycle.ImpendingShutdown
     queueStats ! PoisonPill
-    val futures = workerFSMs.map(ref => gracefulStop(ref, Duration(6, SECONDS), Lifecycle.ImpendingShutdown))
+    val workerWait  = FiniteDuration(settings.shutdownTimeout.mul(0.8).toMillis, MILLISECONDS)
+    val futures     = workerFSMs.map(ref => gracefulStop(ref, workerWait, Lifecycle.ImpendingShutdown))
     implicit val ec = system.dispatcher
-    Await.result(Future.sequence(futures), Duration(8, SECONDS))
+    Await.result(Future.sequence(futures), settings.shutdownTimeout)
   })
 
   def awaitSystemTermination() : Unit = system.awaitTermination()

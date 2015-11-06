@@ -13,6 +13,8 @@ import scala.util.{Failure, Success}
 object RabbitQueueStatusActor {
   //  Used to refresh the queue status information
   final case class QueueStatusUpdate(statuses: Seq[QueueStatusInfo])
+  //  Used to provide partial updates about queue status after a dequeue event
+  final case class PartialStatusUpdate(name: String, size: Int)
 }
 
 final class RabbitQueueStatusActor(config: WorkerConfig, delegator: ActorRef) extends Actor with ActorLogging {

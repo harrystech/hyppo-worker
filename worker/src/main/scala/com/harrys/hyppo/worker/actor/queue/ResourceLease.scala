@@ -1,15 +1,13 @@
-package com.harrys.hyppo.worker.actor.sync
+package com.harrys.hyppo.worker.actor.queue
 
-import com.harrys.hyppo.worker.actor.amqp.WorkerResources._
+import com.harrys.hyppo.worker.api.proto.{ConcurrencyWorkResource, ThrottledWorkResource, WorkResource}
 import com.rabbitmq.client._
-import com.thenewmotion.akka.rabbitmq.Channel
 
 /**
  * Created by jpetty on 11/3/15.
  */
 sealed trait ResourceLease {
-  def resource: WorkerResource
-  def channel: Channel
+  def resource: WorkResource
   def token: GetResponse
   def inspect: String
   final def resourceName: String = resource.resourceName
@@ -20,8 +18,7 @@ sealed trait ResourceLease {
 
 final case class ConcurrencyResourceLease
 (
-  override val resource: ConcurrencyWorkerResource,
-  override val channel:  Channel,
+  override val resource: ConcurrencyWorkResource,
   override val token:    GetResponse
 ) extends ResourceLease {
 
@@ -31,8 +28,7 @@ final case class ConcurrencyResourceLease
 
 final case class ThrottledResourceLease
 (
-  override val resource: ThrottledWorkerResource,
-  override val channel:  Channel,
+  override val resource: ThrottledWorkResource,
   override val token:    GetResponse
 ) extends ResourceLease {
 

@@ -4,7 +4,8 @@ import java.time._
 import java.util.UUID
 
 import com.harrys.hyppo.util.TimeUtils
-import com.harrys.hyppo.worker.actor.amqp.WorkerResources.ThrottledWorkerResource
+import com.harrys.hyppo.worker.actor.queue.QueueItemHeaders
+import com.harrys.hyppo.worker.api.proto.ThrottledWorkResource
 import com.rabbitmq.client.AMQP.BasicProperties
 
 /**
@@ -13,22 +14,6 @@ import com.rabbitmq.client.AMQP.BasicProperties
 object AMQPMessageProperties {
   //  Header set on messages indicating java serialization
   final val SerializationMimeType = "application/x-java-serialized-object"
-
-  def enqueueProperties(correlationId: UUID, replyToQueue: String, timeToLive: scala.concurrent.duration.FiniteDuration) : BasicProperties = {
-    enqueueProperties(correlationId, replyToQueue, TimeUtils.currentLocalDateTime(), TimeUtils.javaDuration(timeToLive))
-  }
-
-  def enqueueProperties(correlationId: UUID, replyToQueue: String, timeToLive: Duration) : BasicProperties = {
-    enqueueProperties(correlationId, replyToQueue, TimeUtils.currentLocalDateTime(), timeToLive)
-  }
-
-  def enqueueProperties(correlationId: UUID, replyToQueue: String, startedAt: LocalDateTime, timeToLive: scala.concurrent.duration.FiniteDuration) : BasicProperties = {
-    enqueueProperties(correlationId, replyToQueue, startedAt, TimeUtils.javaDuration(timeToLive))
-  }
-
-  def enqueueProperties(properties: HyppoMessageProperties) : BasicProperties = {
-    enqueueProperties(properties.correlationId, properties.replyToQueue, properties.startedAt, properties.timeToLive)
-  }
 
   def enqueueProperties(correlationId: UUID, replyToQueue: String, startedAt: LocalDateTime, timeToLive: Duration) : BasicProperties = {
     new BasicProperties.Builder()
@@ -41,36 +26,20 @@ object AMQPMessageProperties {
   }
 
 
-  def replyProperties(original: HyppoMessageProperties) : BasicProperties = {
-    replyProperties(original, TimeUtils.currentLocalDateTime())
-  }
-
-  def replyProperties(original: HyppoMessageProperties, timestamp: LocalDateTime) : BasicProperties = {
-    replyProperties(original.correlationId, timestamp)
-  }
-
-  def replyProperties(correlationId: UUID, timestamp: LocalDateTime) : BasicProperties = {
+  def replyProperties(original: QueueItemHeaders): BasicProperties = {
     new BasicProperties.Builder()
       .contentType(SerializationMimeType)
       .timestamp(TimeUtils.currentLegacyDate())
-      .correlationId(correlationId.toString)
+      .correlationId(original.correlationId)
       .build()
   }
 
-  def throttleTokenProperties(resource: ThrottledWorkerResource) : BasicProperties = {
+  def throttleTokenProperties(resource: ThrottledWorkResource) : BasicProperties = {
     val timeout = Math.max(resource.throttleRate.toMillis, 1L)
     new BasicProperties.Builder()
       .contentType(SerializationMimeType)
       .timestamp(TimeUtils.currentLegacyDate())
       .expiration(timeout.toString)
       .build()
-  }
-
-  def parseItemProperties(properties: BasicProperties) : HyppoMessageProperties = {
-    val replyQueue  = properties.getReplyTo
-    val correlation = UUID.fromString(properties.getCorrelationId)
-    val expiration  = Duration.ofMillis(properties.getExpiration.toLong)
-    val startedAt   = TimeUtils.toLocalDateTime(properties.getTimestamp)
-    HyppoMessageProperties(correlation, replyQueue, startedAt, expiration)
   }
 }

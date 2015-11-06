@@ -1,9 +1,8 @@
 package com.harrys.hyppo.worker.actor.amqp
 
-import java.util.UUID
-
 import akka.actor.{Actor, ActorLogging, ActorRef}
 import com.harrys.hyppo.config.CoordinatorConfig
+import com.harrys.hyppo.util.TimeUtils
 import com.harrys.hyppo.worker.api.proto.{GeneralWorkerInput, IntegrationWorkerInput}
 import com.thenewmotion.akka.rabbitmq._
 
@@ -18,8 +17,8 @@ final class EnqueueWorkQueueProxy(config: CoordinatorConfig, connection: ActorRe
 
   val channelActor = connection.createChannel(ChannelActor.props((channel: Channel, self: ActorRef) => {
     queueHelpers.createExpiredQueue(channel)
-    queueHelpers.createGeneralWorkQueue(channel)
     queueHelpers.createResultsQueue(channel)
+    queueHelpers.createGeneralWorkQueue(channel)
   }))
 
   override def receive: Receive = {
@@ -31,14 +30,14 @@ final class EnqueueWorkQueueProxy(config: CoordinatorConfig, connection: ActorRe
 
   def publishWithChannel(channel: Channel, work: GeneralWorkerInput) : Unit = {
     val body  = serializer.serialize(work)
-    val props = AMQPMessageProperties.enqueueProperties(UUID.randomUUID(), queueNaming.resultsQueueName, config.workTimeout)
+    val props = AMQPMessageProperties.enqueueProperties(work.executionId, queueNaming.resultsQueueName, TimeUtils.currentLocalDateTime(), TimeUtils.javaDuration(config.workTimeout))
     channel.basicPublish("", queueNaming.generalQueueName, true, false, props, body)
   }
 
   def publishWithChannel(channel: Channel, work: IntegrationWorkerInput) : Unit = {
-    val queue = queueHelpers.createIntegrationQueue(channel, work.integration).getQueue
+    val queue = queueHelpers.createIntegrationQueue(channel, work).getQueue
     val body  = serializer.serialize(work)
-    val props = AMQPMessageProperties.enqueueProperties(UUID.randomUUID(), queueNaming.resultsQueueName, config.workTimeout)
+    val props = AMQPMessageProperties.enqueueProperties(work.executionId, queueNaming.resultsQueueName, TimeUtils.currentLocalDateTime(), TimeUtils.javaDuration(config.workTimeout))
     channel.basicPublish("", queue, true, false, props, body)
   }
 }

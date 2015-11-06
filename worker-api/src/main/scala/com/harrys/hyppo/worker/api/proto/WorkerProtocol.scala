@@ -1,5 +1,7 @@
 package com.harrys.hyppo.worker.api.proto
 
+import java.util.UUID
+
 import com.harrys.hyppo.source.api.PersistingSemantics
 import com.harrys.hyppo.source.api.model.{DataIngestionJob, DataIngestionTask, IngestionSource}
 import com.harrys.hyppo.worker.api.code.{ExecutableIntegration, IntegrationCode, IntegrationSchema, UnvalidatedIntegration}
@@ -10,7 +12,8 @@ import com.harrys.hyppo.worker.api.code.{ExecutableIntegration, IntegrationCode,
 sealed trait WorkerInput extends Product with Serializable { self =>
   def code: IntegrationCode
   def source: IngestionSource
-  def subtaskCount: Int
+  def executionId: UUID
+  def resources: Seq[WorkResource]
   def summaryString: String = {
     s"${self.productPrefix}(source=${source.getName})"
   }
@@ -33,6 +36,7 @@ sealed trait GeneralWorkerInput extends WorkerInput {
 sealed trait WorkerResponse extends Product with Serializable {
   def input: WorkerInput
   def logFile: RemoteLogFile
+  final def executionId: UUID = input.executionId
 }
 
 @SerialVersionUID(1L)
@@ -48,9 +52,12 @@ final case class FailureResponse
 //
 
 @SerialVersionUID(1L)
-final case class ValidateIntegrationRequest(override val integration: UnvalidatedIntegration) extends GeneralWorkerInput {
-  override def subtaskCount: Int = 1
-}
+final case class ValidateIntegrationRequest
+(
+  override val integration: UnvalidatedIntegration,
+  override val executionId: UUID,
+  override val resources: Seq[WorkResource]
+) extends GeneralWorkerInput
 
 @SerialVersionUID(1L)
 final case class ValidationErrorDetails(message: String, exception: Option[IntegrationException])
@@ -76,10 +83,10 @@ final case class ValidateIntegrationResponse
 final case class CreateIngestionTasksRequest
 (
   override val integration: ExecutableIntegration,
-  job: DataIngestionJob
-) extends IntegrationWorkerInput {
-  override def subtaskCount: Int = 1
-}
+  override val executionId: UUID,
+  override val resources: Seq[WorkResource],
+  job: DataIngestionJob,
+) extends IntegrationWorkerInput
 
 @SerialVersionUID(1L)
 final case class CreateIngestionTasksResponse
@@ -100,10 +107,11 @@ final case class CreateIngestionTasksResponse
 final case class FetchProcessedDataRequest
 (
   override val integration: ExecutableIntegration,
+  override val executionId: UUID,
+  override val resources: Seq[WorkResource],
   task: DataIngestionTask
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
-  override def subtaskCount: Int = 1
 }
 
 
@@ -128,10 +136,11 @@ final case class FetchProcessedDataResponse
 final case class FetchRawDataRequest
 (
   override val integration: ExecutableIntegration,
+  override val executionId: UUID,
+  override val resources: Seq[WorkResource],
   task: DataIngestionTask
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
-  override def subtaskCount: Int = 1
 }
 
 @SerialVersionUID(1L)
@@ -153,11 +162,12 @@ final case class FetchRawDataResponse
 final case class ProcessRawDataRequest
 (
   override val integration: ExecutableIntegration,
+  override val executionId: UUID,
+  override val resources: Seq[WorkResource],
   task: DataIngestionTask,
   files: Seq[RemoteRawDataFile]
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
-  override def subtaskCount: Int = 1
 }
 
 @SerialVersionUID(1L)
@@ -184,18 +194,18 @@ final case class ProcessedTaskData(task: DataIngestionTask, file: RemoteProcesse
 final case class PersistProcessedDataRequest
 (
   override val integration: ExecutableIntegration,
-  override val job:   DataIngestionJob,
-  data:  Seq[ProcessedTaskData]
+  override val executionId: UUID,
+  override val resources: Seq[WorkResource],
+  task:   DataIngestionTask,
+  data:   RemoteProcessedDataFile
 ) extends IntegrationWorkerInput {
-
-  override def subtaskCount: Int = data.size
+  override def job: DataIngestionJob = task.getIngestionJob
 }
 
 @SerialVersionUID(1L)
 final case class PersistProcessedDataResponse
 (
   override val input:   PersistProcessedDataRequest,
-  override val logFile: RemoteLogFile,
-  persisted: ProcessedTaskData
+  override val logFile: RemoteLogFile
 ) extends WorkerResponse
 

@@ -207,10 +207,11 @@ class CommanderActor
 
   def performRawDataProcessing(taskActor: ActorRef, input: ProcessRawDataRequest) : Future[Unit] = {
     val remoteLog   = dataHandler.newRemoteLogLocation(input)
-
-    val filesFuture  = Future.sequence(input.files.map(dataHandler.download))
+    val filesFuture = Future.sequence(input.files.map(dataHandler.download)).andThen {
+      case Success(_) =>
+        taskActor ! TaskFSMEvent.OperationStarting
+    }
     val outputFuture = filesFuture.map { files =>
-      taskActor ! TaskFSMEvent.OperationStarting
       simpleCommander.executeCommand(new ProcessRawDataCommand(input.task, JavaConversions.seqAsJavaList(files)))
     }
     val responseFuture = outputFuture.flatMap {
@@ -228,39 +229,21 @@ class CommanderActor
   }
 
   def performProcessedDataPersisting(taskActor: ActorRef, input: PersistProcessedDataRequest) : Future[Unit] = {
-    if (input.data.isEmpty){
-      taskActor ! TaskFSMEvent.OperationStarting
-      Future.successful[Unit]{ () }
-    } else {
-      val firstItem    = input.data.head
-      val firstFuture  = singleProcessedDataPersistingTask(taskActor, input, firstItem, isFirst = true)
-      input.data.tail.foldLeft(firstFuture) { (future, next) =>
-        future.flatMap { _ => singleProcessedDataPersistingTask(taskActor, input, next, isFirst = false) }
-      }
-    }
-  }
-
-  def singleProcessedDataPersistingTask(taskActor: ActorRef, input: PersistProcessedDataRequest, single: ProcessedTaskData, isFirst: Boolean) : Future[Unit] = {
     val remoteLog    = dataHandler.newRemoteLogLocation(input)
-    val fileFuture   = dataHandler.download(single.file)
-    val outputFuture = fileFuture.map { data =>
-      if (isFirst){
+    val fileFuture   = dataHandler.download(input.data).andThen {
+      case Success(_) =>
         taskActor ! TaskFSMEvent.OperationStarting
-      }
-      simpleCommander.executeCommand(new PersistProcessedDataCommand(single.task, data))
+    }
+    val outputFuture = fileFuture.map { data =>
+      simpleCommander.executeCommand(new PersistProcessedDataCommand(input.task, data))
     }
     val responseFuture = outputFuture.map({
       case CommandOutput(result: PersistProcessedDataResult, logFile) =>
-        ResponseWithPendingLogUpload(PersistProcessedDataResponse(input, remoteLog, single), logFile)
+        ResponseWithPendingLogUpload(PersistProcessedDataResponse(input, remoteLog), logFile)
     })
-
-    val uploadFuture = responseFuture.flatMap { pending =>
+    responseFuture.flatMap { pending =>
       taskActor ! TaskFSMEvent.OperationResultAvailable(pending.response)
       createLogUploadFuture(taskActor, pending)
-    }
-
-    uploadFuture.andThen {
-      case _ => tempFiles.cleanAll() //  Purge temp files to make room for the next round
     }
   }
 
