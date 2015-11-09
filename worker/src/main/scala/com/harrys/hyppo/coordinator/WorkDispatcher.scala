@@ -1,6 +1,6 @@
 package com.harrys.hyppo.coordinator
 
-import com.harrys.hyppo.worker.actor.amqp.QueueStatusInfo
+import com.harrys.hyppo.worker.actor.amqp.{QueueDetails, SingleQueueDetails}
 import com.harrys.hyppo.worker.api.proto.WorkerInput
 
 /**
@@ -10,6 +10,8 @@ trait WorkDispatcher {
 
   def enqueue(input: WorkerInput) : Unit
 
-  def fetchQueueStatuses() : Seq[QueueStatusInfo]
+  def fetchLogicalHyppoQueueDetails() : Seq[QueueDetails]
+
+  def fetchRawHyppoQueueDetails() : Seq[SingleQueueDetails]
 
 }

@@ -46,7 +46,7 @@ abstract class RabbitMQTests[T <: HyppoConfig](systemName: String, final val con
 
   final val naming     = new QueueNaming(config)
   final val helpers    = new QueueHelpers(config, naming)
-  final val serializer = new AMQPSerialization(system)
+  final val serializer = new AMQPSerialization
   final val leasing    = new ResourceLeasing
 
   protected def enqueueThenDequeue(channel: Channel, input: IntegrationWorkerInput)(implicit timeout: Timeout = Timeout(config.rabbitMQTimeout)) : WorkQueueExecution = {

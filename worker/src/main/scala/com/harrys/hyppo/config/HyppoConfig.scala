@@ -2,7 +2,7 @@ package com.harrys.hyppo.config
 
 import com.amazonaws.auth.{AWSCredentialsProvider, BasicAWSCredentials, DefaultAWSCredentialsProviderChain}
 import com.amazonaws.internal.StaticCredentialsProvider
-import com.harrys.hyppo.worker.actor.amqp.RabbitHttpClient
+import com.harrys.hyppo.worker.actor.amqp.{QueueNaming, RabbitHttpClient}
 import com.rabbitmq.client.ConnectionFactory
 import com.typesafe.config.Config
 
@@ -66,7 +66,7 @@ abstract class HyppoConfig(config: Config) extends Serializable {
   final val rabbitMQApiSSL  = config.getBoolean("hyppo.rabbitmq.rest-api-ssl")
 
   final def newRabbitMQApiClient(): RabbitHttpClient = {
-    new RabbitHttpClient(rabbitMQConnectionFactory, rabbitMQApiPort, useSSL = rabbitMQApiSSL)
+    new RabbitHttpClient(rabbitMQConnectionFactory, rabbitMQApiPort, useSSL = rabbitMQApiSSL, new QueueNaming(this))
   }
 
   final def underlying: Config = config

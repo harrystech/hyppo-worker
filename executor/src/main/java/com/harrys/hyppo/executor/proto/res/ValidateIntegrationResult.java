@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto.res;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.OperationResult;
 import com.harrys.hyppo.executor.proto.ValidationErrorDetail;
 import com.harrys.hyppo.executor.util.SchemaToJson;
@@ -48,7 +48,7 @@ public final class ValidateIntegrationResult extends OperationResult {
             @JsonProperty("schema") final Schema schema,
             @JsonProperty("validationErrors") final List<ValidationErrorDetail> validationErrors
     ){
-        super(OperationType.ValidateIntegration);
+        super(ExecutorOperation.ValidateIntegration);
         this.source  = source;
         this.persistingSemantics = persistingSemantics;
         this.isRawDataIntegration = isRawDataIntegration;

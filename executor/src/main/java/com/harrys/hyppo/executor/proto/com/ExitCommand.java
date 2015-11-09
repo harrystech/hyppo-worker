@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto.com;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.StartOperationCommand;
 
 /**
@@ -10,6 +10,6 @@ public final class ExitCommand extends StartOperationCommand {
     private static final long serialVersionUID = 1L;
 
     public ExitCommand(){
-        super(OperationType.Exit);
+        super(ExecutorOperation.Exit);
     }
 }

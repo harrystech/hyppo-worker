@@ -219,14 +219,18 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     val autoDelete   = false
     var deferredArgs = Map[String, AnyRef](
       expiredExchangeHeader -> directExchange,
-      expiredQueueHeader    -> resource.availableQueueName
+      expiredQueueHeader    -> resource.availableQueueName,
+      queueSizeHeader       -> 1.underlying()
     )
     if (config.allQueuesEphemeral){
       deferredArgs += (queueTLLHeader -> config.workQueueTTL.toMillis.underlying())
     }
     val availableArgs =
       if (config.allQueuesEphemeral){
-        JavaConversions.mapAsJavaMap(Map(queueTLLHeader -> config.workQueueTTL.toMillis.underlying()))
+        JavaConversions.mapAsJavaMap(Map(
+          queueSizeHeader -> 1.underlying(),
+          queueTLLHeader  -> config.workQueueTTL.toMillis.underlying()
+        ))
       } else {
         null
       }

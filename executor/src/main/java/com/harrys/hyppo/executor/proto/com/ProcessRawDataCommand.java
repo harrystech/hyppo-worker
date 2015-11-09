@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto.com;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.StartOperationCommand;
 import com.harrys.hyppo.source.api.model.DataIngestionTask;
 import org.codehaus.jackson.annotate.JsonCreator;
@@ -26,7 +26,7 @@ public final class ProcessRawDataCommand extends StartOperationCommand {
             @JsonProperty("task")           final DataIngestionTask task,
             @JsonProperty("localRawFiles")  final List<File> localRawFiles
     ){
-        super(OperationType.ProcessRawData);
+        super(ExecutorOperation.ProcessRawData);
         this.task = task;
         this.localRawFiles = localRawFiles;
     }

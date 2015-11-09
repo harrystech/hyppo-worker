@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto.stat;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.StatusUpdate;
 
 /**
@@ -10,6 +10,6 @@ public final class ProcessRawDataUpdate extends StatusUpdate {
     private static final long serialVersionUID = 1L;
 
     public ProcessRawDataUpdate(){
-        super(OperationType.ProcessRawData);
+        super(ExecutorOperation.ProcessRawData);
     }
 }

@@ -8,7 +8,7 @@ import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.executor.cli.ExecutorMain
 import com.harrys.hyppo.executor.proto.com._
 import com.harrys.hyppo.executor.proto.res._
-import com.harrys.hyppo.source.api.model.{DataIngestionJob, DataIngestionTask}
+import com.harrys.hyppo.source.api.model.{DataIngestionJob, TaskAssociations}
 import com.harrys.hyppo.worker.actor.task.TaskFSMEvent
 import com.harrys.hyppo.worker.api.code.{IntegrationCode, IntegrationSchema}
 import com.harrys.hyppo.worker.api.proto._
@@ -110,6 +110,9 @@ class CommanderActor
 
     case persist: PersistProcessedDataRequest =>
       performProcessedDataPersisting(sender(), persist)
+
+    case completed: HandleJobCompletedRequest =>
+      performJobCompletionHandling(sender(), completed)
   }
 
 
@@ -153,7 +156,7 @@ class CommanderActor
 
     val responseSent = outputFuture.andThen {
       case Success(CommandOutput(result: CreateIngestionTasksResult, logFile)) =>
-        val newTasks  = JavaConversions.asScalaBuffer(result.getCreatedTasks).map(t => new DataIngestionTask(input.job, t.getTaskNumber, t.getTaskArguments))
+        val newTasks  = JavaConversions.asScalaBuffer(TaskAssociations.resetJobReferences(input.job, result.getCreatedTasks))
         val response  = CreateIngestionTasksResponse(input, remoteLog, newTasks)
         taskActor ! TaskFSMEvent.OperationResultAvailable(response)
     }
@@ -241,6 +244,24 @@ class CommanderActor
       case CommandOutput(result: PersistProcessedDataResult, logFile) =>
         ResponseWithPendingLogUpload(PersistProcessedDataResponse(input, remoteLog), logFile)
     })
+    responseFuture.flatMap { pending =>
+      taskActor ! TaskFSMEvent.OperationResultAvailable(pending.response)
+      createLogUploadFuture(taskActor, pending)
+    }
+  }
+
+  def performJobCompletionHandling(taskActor: ActorRef, input: HandleJobCompletedRequest) : Future[Unit] = {
+    val remoteLog    = dataHandler.newRemoteLogLocation(input)
+
+    taskActor ! TaskFSMEvent.OperationStarting
+
+    val command        = new HandleJobCompletedCommand(input.completedAt, input.job, JavaConversions.seqAsJavaList(input.tasks))
+    val outputFuture   = Future(simpleCommander.executeCommand(command))
+    val responseFuture = outputFuture.map {
+      case CommandOutput(result: HandleJobCompletedResult, logFile) =>
+        ResponseWithPendingLogUpload(HandleJobCompletedResponse(input, remoteLog), logFile)
+    }
+
     responseFuture.flatMap { pending =>
       taskActor ! TaskFSMEvent.OperationResultAvailable(pending.response)
       createLogUploadFuture(taskActor, pending)

@@ -44,6 +44,9 @@ public final class CommanderSocketHandler {
             case ValidateIntegration:
                 this.handleValidateIntegration(assertAndCast(command, ValidateIntegrationCommand.class));
                 break;
+            case HandleJobCompleted:
+                this.handleJobCompleted(assertAndCast(command, HandleJobCompletedCommand.class));
+                break;
             case Exit:
                 throw new IllegalArgumentException("Operation: " + command.getOperationType().name() + " is special and should not be passed!");
         }
@@ -72,6 +75,10 @@ public final class CommanderSocketHandler {
 
     private final void handleValidateIntegration(final ValidateIntegrationCommand command) throws Exception {
         new ValidateIntegrationOperation(command, mapper, integration, socket).execute();
+    }
+
+    private final void handleJobCompleted(final HandleJobCompletedCommand command) throws Exception {
+        new HandleJobCompletedOperation(command, mapper, integration, socket).execute();
     }
 
     private final void sendJsonMessage(final Object message) throws Exception {

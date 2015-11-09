@@ -16,34 +16,25 @@ import scala.concurrent.Await
  */
 final class ResponseQueueConsumer(config: CoordinatorConfig, connection: ActorRef, handler: WorkResponseHandler) extends Actor with ActorLogging {
   val queueHelpers        = new QueueHelpers(config)
-  val serializer          = new AMQPSerialization(context)
-  val responseConsumer    = connection.createChannel(ChannelActor.props(configureResponseQueueConsumer), name = Some("consumer-channel"))
-  var consumerTag: String = null
-
-  private final case class ConsumerRegistration(consumerTag: String)
+  val serializer          = new AMQPSerialization
+  val consumerChannel     = connection.createChannel(ChannelActor.props(configureResponseQueueConsumer), name = Some("consumer-channel"))
 
   override def receive: Receive = {
-    case ConsumerRegistration(tag) =>
-      log.info(s"Successfully registered consumer: $tag")
-      consumerTag = tag
-
     case ImpendingShutdown =>
       log.info("Shutting down consumer")
+      Await.ready(gracefulStop(consumerChannel, config.rabbitMQTimeout), config.rabbitMQTimeout)
       context.stop(self)
-      if (consumerTag != null){
-        val tag = consumerTag
-        responseConsumer ! ChannelMessage(c => c.basicCancel(tag))
-        Await.ready(gracefulStop(responseConsumer, config.rabbitMQTimeout), config.rabbitMQTimeout)
-      }
   }
 
   def configureResponseQueueConsumer(channel: Channel, channelActor: ActorRef) : Unit = {
     channel.basicQos(1)
-    val queueName   = queueHelpers.createResultsQueue(channel).getQueue
     val autoAck     = false
-    val consumerTag = channel.basicConsume(queueName, autoAck, new ResponseConsumer(channel))
-    log.debug(s"Starting consumer $consumerTag to listen on queue: $queueName")
-    self ! ConsumerRegistration(consumerTag)
+    val resultQueue = queueHelpers.createResultsQueue(channel).getQueue
+    val expireQueue = queueHelpers.createExpiredQueue(channel).getQueue
+    val resultTag   = channel.basicConsume(resultQueue, autoAck, new ResponseConsumer(channel))
+    log.debug(s"Starting response consumer $resultTag to listen on queue: $resultQueue")
+    val expireTag   = channel.basicConsume(expireQueue, autoAck, new ExpiredConsumer(channel))
+    log.debug(s"Starting expired consumer $expireTag to consumer from queue: $expireQueue")
   }
 
   private final class ResponseConsumer(channel: Channel) extends DefaultConsumer(channel) {
@@ -56,20 +47,31 @@ final class ResponseQueueConsumer(config: CoordinatorConfig, connection: ActorRe
         channel.basicAck(envelope.getDeliveryTag, false)
       } catch {
         case e: Exception =>
-          log.error(s"Failed to process delivery ${ envelope.getDeliveryTag }", e)
+          log.error(s"Failed to process response delivery ${ envelope.getDeliveryTag }", e)
           channel.basicReject(envelope.getDeliveryTag, true)
           throw e
       }
     }
 
-    private def handleSingle(unmatched: WorkerResponse) : Unit = unmatched match {
-      case r: ValidateIntegrationResponse  => handler.onIntegrationValidated(r)
-      case r: CreateIngestionTasksResponse => handler.onIngestionTasksCreated(r)
-      case r: FetchRawDataResponse         => handler.onRawDataFetched(r)
-      case r: ProcessRawDataResponse       => handler.onRawDataProcessed(r)
-      case r: FetchProcessedDataResponse   => handler.onProcessedDataFetched(r)
-      case r: PersistProcessedDataResponse => handler.onProcessedDataPersisted(r)
-      case r: FailureResponse              => handler.onWorkFailed(r)
+    private def handleSingle(response: WorkerResponse) : Unit = response match {
+      case failed: FailureResponse => handler.handleWorkFailed(failed)
+      case normal => handler.handleWorkCompleted(normal)
+    }
+  }
+
+  private final class ExpiredConsumer(channel: Channel) extends DefaultConsumer(channel) {
+    override def handleDelivery(consumerTag: String, envelope: Envelope, properties: BasicProperties, body: Array[Byte]) : Unit = {
+      try {
+        val expired = serializer.deserialize[WorkerInput](body)
+        log.debug(s"Received expired work delivery ${envelope.getDeliveryTag} with body ${expired.toString}")
+        handler.handleWorkExpired(expired)
+        channel.basicAck(envelope.getDeliveryTag, false)
+      } catch {
+        case e: Exception =>
+          log.error(s"Failed to process delivery ${ envelope.getDeliveryTag }", e)
+          channel.basicReject(envelope.getDeliveryTag, true)
+          throw e
+      }
     }
   }
 }

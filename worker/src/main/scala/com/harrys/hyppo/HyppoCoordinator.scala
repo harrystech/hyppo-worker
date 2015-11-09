@@ -5,10 +5,10 @@ import javax.inject.{Inject, Singleton}
 import akka.actor._
 import akka.pattern.gracefulStop
 import akka.util.Timeout
-import com.harrys.hyppo.config.{HyppoConfig, CoordinatorConfig}
+import com.harrys.hyppo.config.{CoordinatorConfig, HyppoConfig}
 import com.harrys.hyppo.coordinator.{WorkDispatcher, WorkResponseHandler}
 import com.harrys.hyppo.util.ConfigUtils
-import com.harrys.hyppo.worker.actor.amqp.{QueueHelpers, EnqueueWorkQueueProxy, QueueStatusInfo, ResponseQueueConsumer}
+import com.harrys.hyppo.worker.actor.amqp._
 import com.harrys.hyppo.worker.api.proto.WorkerInput
 import com.thenewmotion.akka.rabbitmq._
 import com.typesafe.config.Config
@@ -35,7 +35,8 @@ final class HyppoCoordinator @Singleton() @Inject() (system: ActorSystem, config
     enqueueProxy ! work
   }
 
-  override def fetchQueueStatuses() : Seq[QueueStatusInfo] = rabbitMQApi.fetchQueueStatusInfo()
+  override def fetchLogicalHyppoQueueDetails() : Seq[QueueDetails]   = rabbitMQApi.fetchLogicalHyppoQueueDetails()
+  override def fetchRawHyppoQueueDetails() : Seq[SingleQueueDetails] = rabbitMQApi.fetchRawHyppoQueueDetails()
 }
 
 

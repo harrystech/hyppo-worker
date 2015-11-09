@@ -11,7 +11,7 @@ import com.thenewmotion.akka.rabbitmq._
  */
 final class EnqueueWorkQueueProxy(config: CoordinatorConfig, connection: ActorRef) extends Actor with ActorLogging {
 
-  val serializer   = new AMQPSerialization(context)
+  val serializer   = new AMQPSerialization
   val queueNaming  = new QueueNaming(config)
   val queueHelpers = new QueueHelpers(config, queueNaming)
 

@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto.com;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.StartOperationCommand;
 import com.harrys.hyppo.source.api.model.DataIngestionJob;
 import org.codehaus.jackson.annotate.JsonCreator;
@@ -19,7 +19,7 @@ public final class CreateIngestionTasksCommand extends StartOperationCommand {
     public CreateIngestionTasksCommand(
             @JsonProperty("job") final DataIngestionJob job
     ){
-        super(OperationType.CreateIngestionTasks);
+        super(ExecutorOperation.CreateIngestionTasks);
         this.job = job;
     }
 

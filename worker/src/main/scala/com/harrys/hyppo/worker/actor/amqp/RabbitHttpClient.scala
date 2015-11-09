@@ -28,12 +28,12 @@ import scala.concurrent.duration._
 /**
  * Created by jpetty on 9/15/15.
  */
-final class RabbitHttpClient(server: ConnectionFactory, port: Int, useSSL: Boolean = true) {
-  private val log = Logger(LoggerFactory.getLogger(this.getClass))
+final class RabbitHttpClient(server: ConnectionFactory, port: Int, useSSL: Boolean = true, naming: QueueNaming) {
+  private val log     = Logger(LoggerFactory.getLogger(this.getClass))
   private val scheme  = if (useSSL) "https" else "http"
   private val baseURI = new URIBuilder().setScheme(scheme).setHost(server.getHost).setPort(port).build()
 
-  def fetchQueueStatusInfo() : Seq[QueueStatusInfo] = {
+  def fetchRawQueueDetails() : Seq[SingleQueueDetails] = {
     val requestURI = baseURI.resolve("/api/queues/" + URLEncoder.encode(server.getVirtualHost, "UTF-8"))
 
     performRequest(new HttpGet(requestURI)) { response =>
@@ -41,19 +41,28 @@ final class RabbitHttpClient(server: ConnectionFactory, port: Int, useSSL: Boole
       implicit val formats = DefaultFormats
       val json   = parse(EntityUtils.toString(response.getEntity))
       val format = DateTimeFormatter.ofPattern("yyyy-MM-dd H:mm:ss")
-      json.children.map(queue => {
+      val queues = json.children.map(queue => {
         try {
           val name = (queue \ "name").extract[String]
           val size = (queue \ "messages").extract[Option[Int]].getOrElse(0)
           val rate = (queue \ "messages_details" \ "rate").extract[Option[Double]].getOrElse(0.0)
           val idle = (queue \ "idle_since").extract[Option[String]].map(LocalDateTime.parse(_, format))
-          QueueStatusInfo(name, size, rate, idle.getOrElse(TimeUtils.currentLocalDateTime()))
+          SingleQueueDetails(name, size, rate, idle.getOrElse(TimeUtils.currentLocalDateTime()))
         } catch {
           case e: Exception =>
             throw new Exception(s"Failed to parse expected RabbitMQ structure from: ${compact(queue)}", e)
         }
-      }).toSeq
+      })
+      queues.toIndexedSeq
     }
+  }
+
+  def fetchRawHyppoQueueDetails() : Seq[SingleQueueDetails] = {
+    fetchRawQueueDetails().filter(info => naming.belongsToHyppo(info.queueName))
+  }
+
+  def fetchLogicalHyppoQueueDetails() : Seq[QueueDetails] = {
+    naming.toLogicalQueueDetails(fetchRawHyppoQueueDetails())
   }
 
   private def performRequest[T](request: HttpUriRequest)(handler: (CloseableHttpResponse) => T) : T = {

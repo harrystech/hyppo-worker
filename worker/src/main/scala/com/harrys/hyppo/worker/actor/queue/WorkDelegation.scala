@@ -17,12 +17,12 @@ import scala.util.Random
   */
 final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging {
   //  Helper objects for dealing with queues
-  val serializer    = new AMQPSerialization(context)
+  val serializer    = new AMQPSerialization
   val naming        = new QueueNaming(config)
   val helpers       = new QueueHelpers(config, naming)
   val resources     = new ResourceLeasing
   //  The current known information about the queues, updated via assignment once fetched
-  var currentStats  = Map[String, QueueStatusInfo]()
+  var currentStats  = Map[String, SingleQueueDetails]()
 
 
   def shutdownImminent: Receive = {
@@ -35,7 +35,7 @@ final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging
     case RequestForPreferredWork(channelActor, prefer) =>
       val worker  = sender()
       val filter  = naming.belongsToIntegration(prefer) _
-      val base    = List(naming.generalQueueName) ++ integrationChoiceOrder.map(_.name)
+      val base    = List(naming.generalQueueName) ++ integrationQueueOrder.map(_.queueName)
       //  Moves all queues belong to this integration to the front of the list
       val (head, tail) = base.partition(name => filter(name))
       val queues  = head ++ tail
@@ -43,12 +43,12 @@ final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging
 
     case RequestForAnyWork(channelActor) =>
       val worker  = sender()
-      val queues  = List(naming.generalQueueName) ++ integrationChoiceOrder.map(_.name)
+      val queues  = List(naming.generalQueueName) ++ integrationQueueOrder.map(_.queueName)
       channelActor ! ChannelMessage(c => delegateWorkFromQueues(c, worker, queues))
 
     case RabbitQueueStatusActor.QueueStatusUpdate(update) =>
       log.debug("Received new full queue status update")
-      currentStats = update.map(i => i.name -> i).toMap
+      currentStats = update.map(i => i.queueName -> i).toMap
 
     case RabbitQueueStatusActor.PartialStatusUpdate(name, size) =>
       if (naming.isIntegrationQueueName(name)) {
@@ -57,7 +57,7 @@ final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging
           case Some(info) =>
             currentStats += name -> info.copy(size = size)
           case None =>
-            currentStats += name -> QueueStatusInfo(name, size, 0.0, TimeUtils.currentLocalDateTime())
+            currentStats += name -> SingleQueueDetails(name, size, 0.0, TimeUtils.currentLocalDateTime())
         }
       }
 
@@ -103,14 +103,30 @@ final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging
     }
   }
 
-  def integrationChoiceOrder: List[QueueStatusInfo] = {
-    val ordering = currentStats.values.toIndexedSeq.filterNot(_.isEmpty).sortBy(- _.estimatedCompletionTime)
-    if (ordering.isEmpty){
+  def integrationQueueOrder: List[SingleQueueDetails] = {
+    val groupings = nonEmptyIntegrationQueueGroups()
+    if (groupings.isEmpty){
       List()
     } else {
-      val longestTime  = ordering.head.estimatedCompletionTime
-      val (ties, tail) = ordering.partition(_.estimatedCompletionTime == longestTime)
-      (ties.sortBy(- _.size) ++ Random.shuffle(tail)).toList
+      val timeOrdering = groupings.sortBy(- _.estimatedCompletionTime)
+      val longestTime  = timeOrdering.head.estimatedCompletionTime
+      val (ties, tail) = timeOrdering.partition(_.estimatedCompletionTime == longestTime)
+      val finalOrder   = (ties.sortBy(- _.size) ++ tail).toList
+      finalOrder.flatMap {
+        case single: SingleQueueDetails => List(single)
+        case multi:  MultiQueueDetails  => Random.shuffle(multi.queues).toList
+      }
+    }
+  }
+
+  def nonEmptyIntegrationQueueGroups() : Seq[QueueDetails] = {
+    val integrations = currentStats.values.filter(info => {
+      naming.isIntegrationQueueName(info.queueName)
+    })
+    val queueGroups  = naming.toLogicalQueueDetails(integrations)
+    queueGroups.filterNot(_.isEmpty).map {
+      case single: SingleQueueDetails => single
+      case group: MultiQueueDetails   => group.nonEmptyQueues
     }
   }
 

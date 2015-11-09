@@ -66,6 +66,10 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
         stay()
       }
 
+    case Event(channelError: ShutdownSignalException, WaitingForJars(execution)) =>
+      log.error(channelError, "Channel closed while loading code. Resources are automatically, released. Going to idle.")
+      goto(Idle) using Uninitialized
+
     case Event(Failure(cause), WaitingForJars(execution)) =>
       log.debug("Failed to load code for commander. Returning to idle", cause)
       execution.withChannel(c => {
@@ -139,6 +143,11 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
           goto(Idle) using Uninitialized
       }
 
+    case Event(channelError: ShutdownSignalException, active: ActiveCommander) =>
+      log.error(channelError, "Channel closed while in available state. Transitioning to idle until channel stabilizes")
+      context.stop(context.unwatch(active.commander))
+      goto(Idle) using Uninitialized
+
     case Event(item @ WorkQueueExecution(_, _, input: IntegrationWorkerInput, _), active @ ActiveCommander(commander, _, Some(affinity))) =>
       if (active.isSameCode(input.integration)){
         log.debug(s"Reusing previous commander for pre-loaded integration: ${affinity.integration.sourceName}")
@@ -182,6 +191,7 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
     case StopEvent(_, LoadingCode, WaitingForJars(execution)) =>
       stopPollingForWork()
       context.stop(context.unwatch(jarLoadingActor))
+      context.stop(context.unwatch(channelActor))
       log.info("WorkerFSM stopped successfully")
 
     case StopEvent(_, _, active: ActiveCommander) =>
@@ -189,6 +199,8 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
       context.stop(context.unwatch(jarLoadingActor))
       Option(active.taskActor).foreach(a => context.unwatch(a))
       Await.result(gracefulStop(active.commander, config.workerShutdownTimeout), config.workerShutdownTimeout)
+      context.unwatch(channelActor)
+      channelActor ! PoisonPill
       context.stop(context.unwatch(channelActor))
       log.info("WorkerFSM stopped successfully")
 

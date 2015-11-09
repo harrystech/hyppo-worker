@@ -1,8 +1,9 @@
 package com.harrys.hyppo.worker.api.proto
 
+import java.time.LocalDateTime
 import java.util.UUID
 
-import com.harrys.hyppo.source.api.PersistingSemantics
+import com.harrys.hyppo.source.api.{LogicalOperation, PersistingSemantics}
 import com.harrys.hyppo.source.api.model.{DataIngestionJob, DataIngestionTask, IngestionSource}
 import com.harrys.hyppo.worker.api.code.{ExecutableIntegration, IntegrationCode, IntegrationSchema, UnvalidatedIntegration}
 
@@ -14,6 +15,7 @@ sealed trait WorkerInput extends Product with Serializable { self =>
   def source: IngestionSource
   def executionId: UUID
   def resources: Seq[WorkResource]
+  def logicalOperation: LogicalOperation
   def summaryString: String = {
     s"${self.productPrefix}(source=${source.getName})"
   }
@@ -31,12 +33,18 @@ sealed trait GeneralWorkerInput extends WorkerInput {
   def integration: UnvalidatedIntegration
   override final def code: IntegrationCode   = integration.code
   override final def source: IngestionSource = integration.source
+  /**
+    * @return Always an empty sequence of resources for [[GeneralWorkerInput]]. Implementing the method at all
+    *         is just a courtesy to classes that only use [[WorkerInput]] instances.
+    */
+  override final def resources: Seq[WorkResource] = Seq()
 }
 
 sealed trait WorkerResponse extends Product with Serializable {
   def input: WorkerInput
   def logFile: RemoteLogFile
   final def executionId: UUID = input.executionId
+  final def logicalOperation: LogicalOperation = input.logicalOperation
 }
 
 @SerialVersionUID(1L)
@@ -55,9 +63,10 @@ final case class FailureResponse
 final case class ValidateIntegrationRequest
 (
   override val integration: UnvalidatedIntegration,
-  override val executionId: UUID,
-  override val resources: Seq[WorkResource]
-) extends GeneralWorkerInput
+  override val executionId: UUID
+) extends GeneralWorkerInput {
+  override def logicalOperation: LogicalOperation = LogicalOperation.ValidateIntegration
+}
 
 @SerialVersionUID(1L)
 final case class ValidationErrorDetails(message: String, exception: Option[IntegrationException])
@@ -86,7 +95,9 @@ final case class CreateIngestionTasksRequest
   override val executionId: UUID,
   override val resources: Seq[WorkResource],
   job: DataIngestionJob
-) extends IntegrationWorkerInput
+) extends IntegrationWorkerInput {
+  override def logicalOperation: LogicalOperation = LogicalOperation.CreateIngestionTasks
+}
 
 @SerialVersionUID(1L)
 final case class CreateIngestionTasksResponse
@@ -112,6 +123,7 @@ final case class FetchProcessedDataRequest
   task: DataIngestionTask
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
+  override def logicalOperation: LogicalOperation = LogicalOperation.FetchProcessedData
 }
 
 
@@ -141,6 +153,7 @@ final case class FetchRawDataRequest
   task: DataIngestionTask
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
+  override def logicalOperation: LogicalOperation = LogicalOperation.FetchRawData
 }
 
 @SerialVersionUID(1L)
@@ -168,6 +181,7 @@ final case class ProcessRawDataRequest
   files: Seq[RemoteRawDataFile]
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
+  override def logicalOperation: LogicalOperation = LogicalOperation.ProcessRawData
 }
 
 @SerialVersionUID(1L)
@@ -200,12 +214,38 @@ final case class PersistProcessedDataRequest
   data:   RemoteProcessedDataFile
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
+  override def logicalOperation: LogicalOperation = LogicalOperation.PersistProcessedData
 }
 
 @SerialVersionUID(1L)
 final case class PersistProcessedDataResponse
 (
   override val input:   PersistProcessedDataRequest,
+  override val logFile: RemoteLogFile
+) extends WorkerResponse
+
+
+//
+//
+//
+
+@SerialVersionUID(1L)
+final case class HandleJobCompletedRequest
+(
+  override val  integration: ExecutableIntegration,
+  override val  executionId: UUID,
+  override val  resources: Seq[WorkResource],
+  completedAt:  LocalDateTime,
+  job:          DataIngestionJob,
+  tasks:        Seq[DataIngestionTask]
+) extends IntegrationWorkerInput {
+  override def logicalOperation: LogicalOperation = LogicalOperation.HandleJobCompleted
+}
+
+@SerialVersionUID(1L)
+final case class HandleJobCompletedResponse
+(
+  override val input: HandleJobCompletedRequest,
   override val logFile: RemoteLogFile
 ) extends WorkerResponse
 

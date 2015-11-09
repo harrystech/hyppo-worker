@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.stat.FetchProcessedDataUpdate;
 import com.harrys.hyppo.executor.proto.stat.FetchRawDataUpdate;
 import com.harrys.hyppo.executor.proto.stat.PersistProcessedDataUpdate;
@@ -29,14 +29,14 @@ import java.io.Serializable;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public abstract class StatusUpdate implements Serializable {
 
-    private final OperationType operationType;
+    private final ExecutorOperation operationType;
 
-    public StatusUpdate(final OperationType operationType){
+    public StatusUpdate(final ExecutorOperation operationType){
         this.operationType = operationType;
     }
 
     @JsonProperty("operationType")
-    public final OperationType getOperationType(){
+    public final ExecutorOperation getOperationType(){
         return this.operationType;
     }
 }

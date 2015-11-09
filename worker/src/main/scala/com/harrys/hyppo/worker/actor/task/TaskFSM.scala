@@ -104,7 +104,7 @@ final class TaskFSM
       log.info(s"Stopped ${execution.input.summaryString} : ${ reason.toString }")
   }
 
-  private val serialization = new AMQPSerialization(context)
+  private val serialization = new AMQPSerialization
   startWith(PreparingToStart, Nil)
   initialize()
   //  The TaskFSM needs notification if the commander dies

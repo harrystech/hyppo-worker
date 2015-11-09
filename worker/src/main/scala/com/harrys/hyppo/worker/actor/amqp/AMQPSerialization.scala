@@ -1,27 +1,25 @@
 package com.harrys.hyppo.worker.actor.amqp
 
-import akka.actor.{ActorContext, ActorSystem}
-import akka.serialization.{Serialization, SerializationExtension}
-import org.apache.commons.lang3.SerializationException
+import java.io._
+
+import org.apache.commons.io.IOUtils
 
 import scala.reflect._
-import scala.util.{Failure, Success}
 
 /**
  * Created by jpetty on 9/16/15.
  */
-final class AMQPSerialization(serialization: Serialization) {
-
-  def this(system: ActorSystem)   = this(SerializationExtension(system))
-
-  def this(context: ActorContext) = this(context.system)
+final class AMQPSerialization {
 
   def serialize(o: AnyRef) : Array[Byte] = {
-    serialization.serialize(o) match {
-      case Success(bytes) => bytes
-      case Failure(cause) =>
-        throw new SerializationException(s"Failed to serialize instance of ${o.getClass.getCanonicalName}", cause)
+    val bytes  = new ByteArrayOutputStream(1024)
+    val stream = new ObjectOutputStream(bytes)
+    try {
+      stream.writeObject(o)
+    } finally {
+      IOUtils.closeQuietly(stream)
     }
+    bytes.toByteArray
   }
 
   def deserialize[T : ClassTag](bytes: Array[Byte]) : T = {
@@ -30,10 +28,32 @@ final class AMQPSerialization(serialization: Serialization) {
   }
 
   def deserialize[T](bytes: Array[Byte], klass: Class[T]) : T = {
-    serialization.deserialize(bytes, klass) match {
-      case Success(ready) => ready.asInstanceOf[T]
-      case Failure(cause) =>
-        throw new SerializationException(s"Failed to deserialize bytes into instance of ${klass.getCanonicalName}", cause)
+    val stream = new LookaheadObjectInputStream(klass, new ByteArrayInputStream(bytes))
+    try {
+      stream.readObject().asInstanceOf[T]
+    } finally {
+      IOUtils.closeQuietly(stream)
+    }
+  }
+
+  final class LookaheadObjectInputStream(onlyAllow: Class[_], inputStream: InputStream) extends ObjectInputStream(inputStream) {
+    @volatile
+    private var firstCall: Boolean = true
+
+    @throws[ClassNotFoundException]("if no associated class can be found")
+    @throws[UnsupportedOperationException]("if the identified class is not valid for the declared serialization classes")
+    override protected def resolveClass(objectStreamClass: ObjectStreamClass) : Class[_] = {
+      if (firstCall){
+        firstCall = false
+        val resolved = super.resolveClass(objectStreamClass)
+        if (onlyAllow.isAssignableFrom(resolved)) {
+          resolved
+        } else {
+          throw new UnsupportedOperationException(s"Illegal serialization of class: ${ resolved.getName }. Supported objects must be instances of ${ onlyAllow.getName }")
+        }
+      } else {
+        super.resolveClass(objectStreamClass)
+      }
     }
   }
 }

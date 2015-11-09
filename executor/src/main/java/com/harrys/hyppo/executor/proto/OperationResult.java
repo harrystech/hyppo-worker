@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.res.*;
 import org.codehaus.jackson.annotate.JsonIgnoreProperties;
 import org.codehaus.jackson.annotate.JsonProperty;
@@ -23,19 +23,20 @@ import java.io.Serializable;
         @JsonSubTypes.Type(value = FetchRawDataResult.class,            name = "FetchRawDataResult"),
         @JsonSubTypes.Type(value = PersistProcessedDataResult.class,    name = "PersistProcessedDataResult"),
         @JsonSubTypes.Type(value = ProcessRawDataResult.class,          name = "ProcessRawDataResult"),
-        @JsonSubTypes.Type(value = ValidateIntegrationResult.class,     name = "ValidateIntegrationResult")
+        @JsonSubTypes.Type(value = ValidateIntegrationResult.class,     name = "ValidateIntegrationResult"),
+        @JsonSubTypes.Type(value = HandleJobCompletedResult.class,      name = "HandleJobCompletedResult")
 })
 @JsonIgnoreProperties(ignoreUnknown = true)
 public abstract class OperationResult implements Serializable {
 
-    private final OperationType operationType;
+    private final ExecutorOperation operationType;
 
-    protected OperationResult(final OperationType operationType){
+    protected OperationResult(final ExecutorOperation operationType){
         this.operationType = operationType;
     }
 
     @JsonProperty("operationType")
-    public final OperationType getOperationType(){
+    public final ExecutorOperation getOperationType(){
         return this.operationType;
     }
 }

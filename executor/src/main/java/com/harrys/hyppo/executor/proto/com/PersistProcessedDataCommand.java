@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto.com;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.StartOperationCommand;
 import com.harrys.hyppo.source.api.model.DataIngestionTask;
 import org.codehaus.jackson.annotate.JsonCreator;
@@ -25,7 +25,7 @@ public final class PersistProcessedDataCommand extends StartOperationCommand {
             @JsonProperty("task")           final DataIngestionTask task,
             @JsonProperty("localDataFile")  final File localDataFile
     ){
-        super(OperationType.PersistProcessedData);
+        super(ExecutorOperation.PersistProcessedData);
         this.task = task;
         this.localDataFile = localDataFile;
     }

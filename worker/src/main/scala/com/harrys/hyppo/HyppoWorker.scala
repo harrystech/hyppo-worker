@@ -2,11 +2,10 @@ package com.harrys.hyppo
 
 import akka.actor._
 import akka.pattern.gracefulStop
-import akka.util.Timeout
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.util.ConfigUtils
 import com.harrys.hyppo.worker.actor.WorkerFSM
-import com.harrys.hyppo.worker.actor.amqp.{QueueHelpers, RabbitQueueStatusActor}
+import com.harrys.hyppo.worker.actor.amqp.RabbitQueueStatusActor
 import com.harrys.hyppo.worker.actor.queue.WorkDelegation
 import com.thenewmotion.akka.rabbitmq._
 import com.typesafe.config.Config

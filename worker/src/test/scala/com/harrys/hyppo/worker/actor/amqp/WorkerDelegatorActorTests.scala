@@ -27,9 +27,9 @@ class WorkerDelegatorActorTests extends RabbitMQTests("WorkerDelegatorActorTests
     }
 
     "respond to queue status updates by updating it status info" in {
-      val statuses = Seq(QueueStatusInfo(name = naming.generalQueueName, size = 0, rate = 0.0, LocalDateTime.now()))
+      val statuses = Seq(SingleQueueDetails(queueName = naming.generalQueueName, size = 0, rate = 0.0, LocalDateTime.now()))
       delegator ! RabbitQueueStatusActor.QueueStatusUpdate(statuses)
-      delegator.underlyingActor.currentStats shouldEqual statuses.map(s => s.name -> s).toMap
+      delegator.underlyingActor.currentStats shouldEqual statuses.map(s => s.queueName -> s).toMap
     }
 
     "incrementally update the queue statuses as new information arrives" in {
@@ -44,19 +44,19 @@ class WorkerDelegatorActorTests extends RabbitMQTests("WorkerDelegatorActorTests
       }
       val queues = workItems.map { item =>
         enqueueWork(item)
-        QueueStatusInfo(name = naming.integrationWorkQueueName(item), size = 1, rate = 0.0, idleSince = TimeUtils.currentLocalDateTime())
+        SingleQueueDetails(queueName = naming.integrationWorkQueueName(item), size = 1, rate = 0.0, idleSince = TimeUtils.currentLocalDateTime())
       }
       delegator ! RabbitQueueStatusActor.QueueStatusUpdate(queues)
-      delegator.underlyingActor.currentStats shouldEqual queues.map(i => i.name -> i).toMap
+      delegator.underlyingActor.currentStats shouldEqual queues.map(i => i.queueName -> i).toMap
 
       //  Clear the contents of those queues
       withChannel { c =>
-        queues.map(_.name).foreach(c.queuePurge)
+        queues.map(_.queueName).foreach(c.queuePurge)
       }
 
       delegator ! RequestForAnyWork(channel)
       expectNoMsg()
-      delegator.underlyingActor.currentStats.mapValues(_.size) shouldEqual queues.map(i => i.name -> 0).toMap
+      delegator.underlyingActor.currentStats.mapValues(_.size) shouldEqual queues.map(i => i.queueName -> 0).toMap
     }
 
     "provide preferred work when possible" in {
@@ -68,7 +68,7 @@ class WorkerDelegatorActorTests extends RabbitMQTests("WorkerDelegatorActorTests
       val queueName   = enqueueWork(work)
       try {
         val probe = TestProbe()
-        delegator ! RabbitQueueStatusActor.QueueStatusUpdate(Seq(QueueStatusInfo(name = queueName, size = 1, rate = 0.0, idleSince = LocalDateTime.now())))
+        delegator ! RabbitQueueStatusActor.QueueStatusUpdate(Seq(SingleQueueDetails(queueName  = queueName, size = 1, rate = 0.0, idleSince = LocalDateTime.now())))
         probe.send(delegator, RequestForPreferredWork(workerChan, integration))
         val reply = probe.expectMsgType[WorkQueueExecution]
         reply.input shouldBe a[CreateIngestionTasksRequest]

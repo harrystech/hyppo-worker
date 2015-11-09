@@ -16,11 +16,17 @@ import org.apache.commons.io.Charsets
   */
 final class QueueNaming(config: HyppoConfig) {
 
+  private val prefix: String = config.workQueuePrefix
+
   val resultsQueueName: String = s"$prefix.results"
 
   val generalQueueName: String = s"$prefix.general"
 
   val expiredQueueName: String = s"$prefix.expired"
+
+  def belongsToHyppo(queueName: String) : Boolean = {
+    queueName.startsWith(prefix)
+  }
 
   def integrationWorkQueueName(input: IntegrationWorkerInput) : String = {
     integrationWorkQueueName(input.integration, input.resources)
@@ -37,13 +43,31 @@ final class QueueNaming(config: HyppoConfig) {
 
   private val integrationPrefix: String = s"$prefix.integration"
   private def integrationQueueBaseName(integration: ExecutableIntegration) : String = {
-    val sourceFix = sanitizeName(integration.sourceName)
-    val version   = s"version-${integration.details.versionNumber}"
-    s"$integrationPrefix.$sourceFix.$version"
+    val sourceFix = sanitizeIntegrationName(integration.sourceName)
+    val version   = s"v-${integration.details.versionNumber}"
+    s"$integrationPrefix.$sourceFix-$version"
   }
 
   def isIntegrationQueueName(name: String) : Boolean = {
     name.startsWith(integrationPrefix)
+  }
+
+  private val logicalBaseRegex = s"""$integrationPrefix\\.([^\\.]+).*""".r
+  def toLogicalQueueDetails(details: Iterable[SingleQueueDetails]) : Seq[QueueDetails] = {
+    val valueGroups = details.groupBy { single =>
+      single.queueName match {
+        case logicalBaseRegex(group) => group
+        case unmatched => unmatched
+      }
+    }.values
+    valueGroups.toIndexedSeq.map { group =>
+      val seq = group.toIndexedSeq
+      if (seq.size == 1){
+        seq.head
+      } else {
+        MultiQueueDetails(seq)
+      }
+    }
   }
 
   def filterForIntegration(integration: ExecutableIntegration, queues: Iterable[String]) : Iterable[String] = {
@@ -61,22 +85,24 @@ final class QueueNaming(config: HyppoConfig) {
     if (concurrency <= 0){
       throw new IllegalArgumentException(s"Concurrency resources must have a concurrency value of 1 or more. Provided: $concurrency")
     }
-    val nameFix   = sanitizeName(resourceName)
+    val nameFix   = sanitizeIntegrationName(resourceName)
     val queueName = s"$concurrencyResourcePrefix.$nameFix-$concurrency"
     ConcurrencyWorkResource(resourceName, queueName, concurrency)
   }
 
   private val throttledResourcePrefix: String = s"$prefix.resource.throttled"
   def throttledResource(resourceName: String, throttle: Duration) : ThrottledWorkResource = {
-    val nameFix   = sanitizeName(resourceName)
+    val nameFix   = sanitizeIntegrationName(resourceName)
     val deferred  = s"$throttledResourcePrefix.defer.$nameFix"
     val available = s"$throttledResourcePrefix.ready.$nameFix"
     ThrottledWorkResource(resourceName, deferred, available, throttle)
   }
 
-  private val cleanupPattern: Pattern = Pattern.compile("\\s")
-  private def sanitizeName(input: String) : String = {
-    cleanupPattern.matcher(input).replaceAll("_")
+  private val whitespace: Pattern = Pattern.compile("\\s")
+  private val dotValues:  Pattern = Pattern.compile("\\.")
+  private def sanitizeIntegrationName(input: String) : String = {
+    val noWhiteSpace = whitespace.matcher(input).replaceAll("_")
+    dotValues.matcher(noWhiteSpace).replaceAll("-")
   }
 
   private val resourceManagement = new ResourceLeasing
@@ -92,6 +118,4 @@ final class QueueNaming(config: HyppoConfig) {
       Hex.encodeHexString(digest.digest()).substring(0, 8)
     }
   }
-
-  private def prefix: String = config.workQueuePrefix
 }
