@@ -3,7 +3,7 @@ package com.harrys.hyppo.worker.actor.amqp
 import java.io.IOException
 
 import com.harrys.hyppo.config.HyppoConfig
-import com.harrys.hyppo.worker.api.proto.{IntegrationWorkerInput, ThrottledWorkResource, ConcurrencyWorkResource}
+import com.harrys.hyppo.worker.api.proto.{ConcurrencyWorkResource, IntegrationWorkerInput, ThrottledWorkResource}
 import com.rabbitmq.client.{AMQP, Channel, Connection, ShutdownSignalException}
 
 import scala.collection.JavaConversions
@@ -31,24 +31,39 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     val durable    = true
     val exclusive  = false
     val autoDelete = false
-    channel.queueDeclare(naming.resultsQueueName, durable, exclusive, autoDelete, null)
+    val arguments  =
+      if (config.allQueuesEphemeral){
+        JavaConversions.mapAsJavaMap(Map(queueTLLHeader -> config.workQueueTTL.toMillis.underlying()))
+      } else {
+        null
+      }
+    channel.queueDeclare(naming.resultsQueueName, durable, exclusive, autoDelete, arguments)
   }
 
   def createExpiredQueue(channel: Channel) : AMQP.Queue.DeclareOk = {
     val durable    = true
     val exclusive  = false
     val autoDelete = false
-    channel.queueDeclare(naming.expiredQueueName, durable, exclusive, autoDelete, null)
+    val arguments  =
+      if (config.allQueuesEphemeral){
+        JavaConversions.mapAsJavaMap(Map(queueTLLHeader -> config.workQueueTTL.toMillis.underlying()))
+      } else {
+        null
+      }
+    channel.queueDeclare(naming.expiredQueueName, durable, exclusive, autoDelete, arguments)
   }
 
   def createGeneralWorkQueue(channel: Channel) : AMQP.Queue.DeclareOk = {
     val durable    = true
     val exclusive  = false
     val autoDelete = false
-    val arguments  = Map[String, String](
+    var arguments  = Map[String, AnyRef](
       expiredExchangeHeader -> directExchange,
       expiredQueueHeader -> naming.expiredQueueName
     )
+    if (config.allQueuesEphemeral){
+      arguments += (queueTLLHeader -> config.workQueueTTL.toMillis.underlying())
+    }
     channel.queueDeclare(naming.generalQueueName, durable, exclusive, autoDelete, JavaConversions.mapAsJavaMap(arguments))
   }
 
@@ -84,9 +99,12 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
           val durable    = true
           val exclusive  = false
           val autoDelete = false
-          val arguments  = Map[String, AnyRef](
+          var arguments  = Map[String, AnyRef](
             queueSizeHeader -> resource.concurrency.underlying()
           )
+          if (config.allQueuesEphemeral){
+            arguments += (queueTLLHeader -> config.workQueueTTL.toMillis.underlying())
+          }
           channel.queueDeclare(resource.queueName, durable, exclusive, autoDelete, JavaConversions.mapAsJavaMap(arguments))
           populateConcurrencyResource(channel, resource)
           resource
@@ -199,11 +217,20 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     val durable      = true
     val exclusive    = false
     val autoDelete   = false
-    val deferredArgs = Map[String, AnyRef](
+    var deferredArgs = Map[String, AnyRef](
       expiredExchangeHeader -> directExchange,
       expiredQueueHeader    -> resource.availableQueueName
     )
-    val availableOk = channel.queueDeclare(resource.availableQueueName, durable, exclusive, autoDelete, null)
+    if (config.allQueuesEphemeral){
+      deferredArgs += (queueTLLHeader -> config.workQueueTTL.toMillis.underlying())
+    }
+    val availableArgs =
+      if (config.allQueuesEphemeral){
+        JavaConversions.mapAsJavaMap(Map(queueTLLHeader -> config.workQueueTTL.toMillis.underlying()))
+      } else {
+        null
+      }
+    val availableOk = channel.queueDeclare(resource.availableQueueName, durable, exclusive, autoDelete, availableArgs)
     val deferredOk  = channel.queueDeclare(resource.deferredQueueName, durable, exclusive, autoDelete, JavaConversions.mapAsJavaMap(deferredArgs))
     (availableOk, deferredOk)
   }

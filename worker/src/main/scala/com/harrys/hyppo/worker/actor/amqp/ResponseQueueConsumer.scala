@@ -9,34 +9,35 @@ import com.harrys.hyppo.worker.api.proto._
 import com.rabbitmq.client.Channel
 import com.thenewmotion.akka.rabbitmq._
 
+import scala.concurrent.Await
+
 /**
  * Created by jpetty on 9/16/15.
  */
 final class ResponseQueueConsumer(config: CoordinatorConfig, connection: ActorRef, handler: WorkResponseHandler) extends Actor with ActorLogging {
-
-  val queueHelpers      = new QueueHelpers(config)
-  val serializer        = new AMQPSerialization(context)
-  val responseConsumer  = connection.createChannel(ChannelActor.props(configureResponseQueueConsumer))
+  val queueHelpers        = new QueueHelpers(config)
+  val serializer          = new AMQPSerialization(context)
+  val responseConsumer    = connection.createChannel(ChannelActor.props(configureResponseQueueConsumer), name = Some("consumer-channel"))
   var consumerTag: String = null
 
   private final case class ConsumerRegistration(consumerTag: String)
 
   override def receive: Receive = {
     case ConsumerRegistration(tag) =>
+      log.info(s"Successfully registered consumer: $tag")
       consumerTag = tag
 
     case ImpendingShutdown =>
+      log.info("Shutting down consumer")
+      context.stop(self)
       if (consumerTag != null){
         val tag = consumerTag
-        responseConsumer ! ChannelMessage((channel: Channel) => channel.basicCancel(tag), dropIfNoChannel = false)
-      }
-      import context.dispatcher
-      gracefulStop(responseConsumer, config.rabbitMQTimeout).onComplete {
-        case _ => context.stop(self)
+        responseConsumer ! ChannelMessage(c => c.basicCancel(tag))
+        Await.ready(gracefulStop(responseConsumer, config.rabbitMQTimeout), config.rabbitMQTimeout)
       }
   }
 
-  def configureResponseQueueConsumer(channel: Channel, self: ActorRef) : Unit = {
+  def configureResponseQueueConsumer(channel: Channel, channelActor: ActorRef) : Unit = {
     channel.basicQos(1)
     val queueName   = queueHelpers.createResultsQueue(channel).getQueue
     val autoAck     = false

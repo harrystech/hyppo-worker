@@ -72,7 +72,7 @@ class CommanderActor
 
   private var isRunningWork = false
 
-  override def receive : Receive = {
+  override def receive: Receive = {
     case WorkCompletedMessage =>
       if (!isRunningWork){
         throw new IllegalStateException(s"CommanderActor should never receive ${ WorkCompletedMessage.productPrefix } when not running work")

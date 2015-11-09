@@ -3,14 +3,12 @@ package com.harrys.hyppo.worker.actor.task
 import akka.actor._
 import com.harrys.hyppo.Lifecycle.ImpendingShutdown
 import com.harrys.hyppo.config.WorkerConfig
-import com.harrys.hyppo.source.api.PersistingSemantics
-import com.harrys.hyppo.worker.actor.amqp.{QueueHelpers, AMQPMessageProperties, QueueNaming, AMQPSerialization}
-import com.harrys.hyppo.worker.actor.queue.{ResourceManagement, WorkQueueExecution}
-import com.harrys.hyppo.worker.actor.sync.ResourceNegotiation
+import com.harrys.hyppo.worker.actor.amqp.{AMQPMessageProperties, AMQPSerialization}
+import com.harrys.hyppo.worker.actor.queue.WorkQueueExecution
 import com.harrys.hyppo.worker.actor.task.TaskFSMEvent.{OperationLogUploaded, OperationResultAvailable, OperationStarting}
 import com.harrys.hyppo.worker.actor.task.TaskFSMStatus.{PerformingOperation, PreparingToStart, UploadingLogs}
-import com.harrys.hyppo.worker.api.proto.{FailureResponse, PersistProcessedDataRequest, WorkerResponse}
-import com.thenewmotion.akka.rabbitmq.{Channel, ChannelMessage}
+import com.harrys.hyppo.worker.api.proto.{FailureResponse, WorkerResponse}
+import com.thenewmotion.akka.rabbitmq.Channel
 
 /**
  * Created by jpetty on 10/29/15.
@@ -22,52 +20,49 @@ final class TaskFSM
   commander:  ActorRef
 ) extends LoggingFSM[TaskFSMStatus, Unit] {
 
-  /**
-    * TODO: All this shit is fucked now that the channel adapter can interrupt it. The handling of channel death will
-    * vary based on phase of work and idempotence flag. If the work is not idempotent and the channel closes, we can try
-    * to re-create a new channel from the worker config and publish the result that way.
-    *
-    * FIX IT ON MONDAY
-    */
-
   when(PreparingToStart){
-    case Event(OperationStarting, data) =>
+    case Event(OperationStarting, _) =>
       log.info("Commander began executing operation")
       goto(PerformingOperation)
 
     case Event(Terminated(actor), _) if actor.equals(commander)  =>
       log.warning("Commander exited before starting work. Requeueing operation")
-      workShouldRetry(FSM.Failure("Commander actor died before execution"))
-
-    case Event(Terminated(actor), _) if actor.equals(channelActor) =>
-      log.warning("Queue channel actor died before starting work. Work is automatically requeued, but commander must terminate")
-      context.unwatch(commander)
-
-      workShouldRetry(FSM.Failure("Queue actor died before execution"))
+      releaseWorkForRetry()
+      stop(FSM.Shutdown)
 
     case Event(ImpendingShutdown, _) =>
       log.warning("Shutdown pending. Work will be sent back to queue")
-      workShouldRetry(FSM.Shutdown)
+      execution.tryWithChannel { c =>
+        c.basicReject(execution.headers.deliveryTag, true)
+        execution.leases.releaseAll()
+      }
+      context.unwatch(commander)
+      stop(FSM.Shutdown)
   }
 
   when(PerformingOperation){
-    case Event(OperationResultAvailable(fail: FailureResponse), data) =>
+    case Event(OperationResultAvailable(fail: FailureResponse), _) =>
       val summary = fail.exception.map(_.summary).getOrElse("<unknown failure>")
-      log.error(s"Operation failed. Sending response to results queue. Failure: ${ summary }. ")
-      waitForLogUploads(fail)
+      log.error(s"Operation failed. Sending response to results queue. Failure: ${ summary }")
+      completeWithResponse(fail)
+      goto(UploadingLogs)
 
-    case Event(OperationResultAvailable(response), data) =>
+    case Event(OperationResultAvailable(response), _) =>
       log.info("Work results produced successfully. Awaiting log upload.")
-      waitForLogUploads(response)
+      completeWithResponse(response)
+      goto(UploadingLogs)
 
-    case Event(Terminated(actor), data) if actor.equals(commander) =>
-      log.error("Unexpected termination while operations were still executing")
-      workShouldRetry(FSM.Failure("Commander actor died during execution"))
+    case Event(Terminated(actor), _) if actor.equals(commander) =>
+      log.error("Unexpected commander termination while operations were executing")
+      execution.leases.tryReleaseAll()
+      stop(FSM.Failure("Commander actor died during execution"))
 
     case Event(ImpendingShutdown, _) =>
-      if (idempotent) {
+      context.unwatch(commander)
+      if (execution.idempotent) {
         log.warning("Shutdown in progress. Idempotent work is assumed safe and will be sent back to queue")
-        workShouldRetry(FSM.Shutdown)
+        releaseWorkForRetry()
+        stop(FSM.Shutdown)
       } else {
         log.warning("Shutdown in progress. Unsafe work will be marked failed")
         stop(FSM.Shutdown)
@@ -76,35 +71,30 @@ final class TaskFSM
   }
 
   when(UploadingLogs) {
-    case Event(OperationLogUploaded, data) =>
+    case Event(OperationLogUploaded, _) =>
       log.info(s"Work log item successfully uploaded")
       taskFullyCompleted()
 
-    case Event(Terminated(actor), data) if actor.equals(commander) =>
+    case Event(Terminated(actor), _) if actor.equals(commander) =>
       log.warning(s"Commander terminated during log uploads")
       taskFullyCompleted()
 
-    case Event(ImpendingShutdown, data) =>
+    case Event(ImpendingShutdown, _) =>
       log.warning(s"Shutdown pending. Work log uploading failed")
       taskFullyCompleted()
-  }
-
-
-
-  val idempotent: Boolean = execution.input match {
-    case p: PersistProcessedDataRequest if p.integration.details.persistingSemantics == PersistingSemantics.Unsafe =>
-      log.debug(s"Task ${ p.summaryString } is not idempotent and will assume aggressive ACK behaviors")
-      false
-    case _ =>
-      log.debug(s"Task ${ execution.input.summaryString } is idempotent and will use lazy ACK behaviors")
-      false
   }
 
   onTransition {
     //  When dealing with unsafe operations, the ACK must happen immediately before
     // the work is started in the executor
-    case PreparingToStart -> PerformingOperation if !idempotent =>
-      channelActor ! ChannelMessage(c => sendAckForItem(c))
+    case PreparingToStart -> PerformingOperation if !execution.idempotent =>
+      execution.withChannel(_.basicAck(execution.headers.deliveryTag, false))
+
+    //  When dealing with idempotent operations, the ACK is safe to defer until
+    //  after results are produced, since no retries are safe
+    case PerformingOperation -> UploadingLogs if execution.idempotent =>
+      execution.withChannel(_.basicAck(execution.headers.deliveryTag, false))
+
     //  Always log transition details
     case from -> to => logTransitionDetails(from, to)
   }
@@ -115,14 +105,11 @@ final class TaskFSM
   }
 
   private val serialization = new AMQPSerialization(context)
-  private val resources     = new ResourceManagement
-  private val channelActor  = execution.channelActor
-  private var hasSentAck    = false
-  //  The TaskFSM takes over from the WorkerFSM on channel ownership after creation.
-  context.watch(execution.channelActor)
-
   startWith(PreparingToStart, Nil)
   initialize()
+  //  The TaskFSM needs notification if the commander dies
+  context.watch(commander)
+
   //  AND GO
   commander ! execution.input
 
@@ -134,22 +121,20 @@ final class TaskFSM
     log.debug(s"${ execution.input.summaryString } - ${ from } => ${ to }")
   }
 
-  def waitForLogUploads(response: WorkerResponse) : State = {
-    //  This message is droppable for idempotent work, since no connection means it's already happening again.
-    val allowDrops = !idempotent
+  def releaseWorkForRetry() : Unit = {
+    execution.withChannel { channel =>
+      channel.basicReject(execution.headers.deliveryTag, true)
+      execution.leases.releaseAll()
+    }
+  }
 
-    context.unwatch(channelActor)
-    //  Publish response, ack message, release all held resources
-    channelActor ! ChannelMessage(c => {
-      publishWorkResponse(c, response)
-      sendAckForItem(c)
-      resources.releaseResources(c, execution.leases)
-    }, dropIfNoChannel = allowDrops)
-
-    //  The channel is now released from duty
-    channelActor ! PoisonPill
-
-    goto(UploadingLogs)
+  def completeWithResponse(response: WorkerResponse) : Unit = {
+    val body  = serialization.serialize(response)
+    val props = AMQPMessageProperties.replyProperties(execution.headers)
+    execution.withChannel { channel =>
+      channel.basicPublish("", execution. headers.replyToQueue, true, false, props, body)
+      execution.leases.releaseAll()
+    }
   }
 
   def taskFullyCompleted() : State = {
@@ -157,24 +142,8 @@ final class TaskFSM
     stop(FSM.Normal)
   }
 
-  def workShouldRetry(reason: FSM.Reason) : State = {
-    context.unwatch(channelActor)
-    channelActor ! ChannelMessage(c => sendRejectionForItem(c, requeue = true))
-    channelActor ! PoisonPill
-    context.unwatch(commander)
-    stop(reason)
-  }
-
-  def sendAckForItem(channel: Channel): Unit = if (!hasSentAck) {
-    //  Acks only fire once.
-    hasSentAck = true
+  def sendAckForItem(channel: Channel): Unit = {
     channel.basicAck(execution.headers.deliveryTag, false)
-  }
-
-  def sendRejectionForItem(channel: Channel, requeue: Boolean = true) : Unit = if (!hasSentAck) {
-    //  Acks only fire once.
-    hasSentAck = true
-    channel.basicReject(execution.headers.deliveryTag, requeue)
   }
 
   def publishWorkResponse(channel: Channel, response: WorkerResponse) : Unit = {

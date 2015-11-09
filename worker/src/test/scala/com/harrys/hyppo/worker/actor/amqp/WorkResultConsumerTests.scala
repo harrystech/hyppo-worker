@@ -3,17 +3,18 @@ package com.harrys.hyppo.worker.actor.amqp
 import akka.pattern.gracefulStop
 import akka.testkit.TestActorRef
 import com.harrys.hyppo.Lifecycle
-import com.harrys.hyppo.config.CoordinatorConfig
 import com.harrys.hyppo.coordinator.WorkResponseHandler
 import com.harrys.hyppo.worker.TestConfig
+import com.harrys.hyppo.worker.actor.RabbitMQTests
 import com.harrys.hyppo.worker.api.proto._
+import org.scalatest.concurrent.Eventually
 
 import scala.concurrent.Await
 
 /**
  * Created by jpetty on 9/17/15.
  */
-class WorkResultConsumerTests extends RabbitMQTests(new CoordinatorConfig(TestConfig.basicTestConfig)) {
+class WorkResultConsumerTests extends RabbitMQTests("WorkResultConsumerTests", TestConfig.coordinatorWithRandomQueuePrefix()) with Eventually {
 
   val handler = new WorkResponseHandler {
     override def onIngestionTasksCreated(created: CreateIngestionTasksResponse): Unit = {}
@@ -31,8 +32,16 @@ class WorkResultConsumerTests extends RabbitMQTests(new CoordinatorConfig(TestCo
     override def onProcessedDataPersisted(persisted: PersistProcessedDataResponse): Unit = {}
   }
 
+  override implicit val patienceConfig = PatienceConfig(timeout = config.rabbitMQTimeout * 8, interval = config.rabbitMQTimeout / 4)
+
   "The WorkResultConsumer" must {
-    val consumer = TestActorRef(new ResponseQueueConsumer(config, connection, handler))
+    val consumer = TestActorRef(new ResponseQueueConsumer(config, connectionActor, handler), "consumer")
+
+    "determine a consumer tag" in {
+      eventually {
+        consumer.underlyingActor.consumerTag shouldNot equal(null)
+      }
+    }
 
     "gracefully shutdown when told" in {
       val future = gracefulStop(consumer, config.rabbitMQTimeout, Lifecycle.ImpendingShutdown)

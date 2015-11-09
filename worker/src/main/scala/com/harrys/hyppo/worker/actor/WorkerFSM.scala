@@ -10,6 +10,8 @@ import com.harrys.hyppo.worker.actor.task.TaskFSM
 import com.harrys.hyppo.worker.api.code.ExecutableIntegration
 import com.harrys.hyppo.worker.api.proto.{GeneralWorkerInput, IntegrationWorkerInput}
 import com.harrys.hyppo.worker.cache.{JarLoadingActor, LoadedJarFile}
+import com.rabbitmq.client.{ShutdownListener, ShutdownSignalException}
+import com.thenewmotion.akka.rabbitmq._
 import org.apache.commons.io.FileUtils
 
 import scala.concurrent.Await
@@ -19,9 +21,10 @@ import scala.util.Failure
 /**
  * Created by jpetty on 10/30/15.
  */
-final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends LoggingFSM[WorkerState, CommanderState] {
+final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: ActorRef) extends LoggingFSM[WorkerState, CommanderState] {
 
   val jarLoadingActor = context.watch(context.actorOf(Props(classOf[JarLoadingActor], config)))
+  val channelActor    = context.watch(connection.createChannel(ChannelActor.props(initializeWorkerChannel), name = Some("channel")))
 
   override def logDepth: Int = 10
 
@@ -34,17 +37,18 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
     case Event(execution: WorkQueueExecution, _) =>
       goto(LoadingCode) using WaitingForJars(execution)
     case Event(RequestWorkEvent, _) =>
-      delegator ! RequestForAnyWork
+      delegator ! RequestForAnyWork(channelActor)
+      stay()
+    case Event(cause: ShutdownSignalException, _) =>
+      log.warning(s"Received channel shutdown message: ${ cause.getMessage }")
       stay()
   }
 
-  //  When loading code, the WorkerFSM is always temporarily responsible for the channel actor. The data in that
-  //  state is ALWAYS WaitingForJars() type
+  //  When loading code, the WorkerFSM must initiate the request to download the necessary jars
   onTransition {
     case _ -> LoadingCode =>
       val execution = nextStateData.asInstanceOf[WaitingForJars].execution
       jarLoadingActor ! JarLoadingActor.LoadJars(execution.input.code.jarFiles)
-      context.watch(execution.channelActor)
   }
 
 
@@ -62,24 +66,28 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
         stay()
       }
 
-    case Event(Terminated(actor), WaitingForJars(execution)) if actor.equals(execution.channelActor) =>
-      log.warning("Queue channel actor died before code loading completed. Returning to idle state")
-      context.unwatch(execution.channelActor)
-      goto(Idle) using Uninitialized
-
     case Event(Failure(cause), WaitingForJars(execution)) =>
-      log.debug("Failed to load code for commander. Killing channel and returning to idle", cause)
-      context.stop(context.unwatch(execution.channelActor))
+      log.debug("Failed to load code for commander. Returning to idle", cause)
+      execution.withChannel(c => {
+        c.basicReject(execution.headers.deliveryTag, true)
+        execution.leases.releaseAll()
+      })
       goto(Idle) using Uninitialized
 
     case Event(Lifecycle.ImpendingShutdown, WaitingForJars(execution)) =>
       log.debug("Failed to load code due to impending shutdown")
-      context.stop(context.unwatch(execution.channelActor))
+      execution.withChannel(c => {
+        c.basicReject(execution.headers.deliveryTag, true)
+        execution.leases.releaseAll()
+      })
       stop(FSM.Shutdown)
 
     case Event(StateTimeout, WaitingForJars(execution)) =>
       log.debug("Code loading timed out. Work will return to queue automatically")
-      context.stop(context.unwatch(execution.channelActor))
+      execution.withChannel(c => {
+        c.basicReject(execution.headers.deliveryTag, true)
+        execution.leases.releaseAll()
+      })
       goto(Idle) using Uninitialized
   }
 
@@ -102,6 +110,12 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
           goto(Idle) using Uninitialized
       }
 
+    case Event(channelError: ShutdownSignalException, active: ActiveCommander) =>
+      log.error(channelError, "Channel closed while work was in progress. Killing commander.")
+      context.unwatch(active.taskActor)
+      context.stop(context.unwatch(active.commander))
+      goto(Idle) using Uninitialized
+
     case Event(StateTimeout, active: ActiveCommander) =>
       log.error("Current work timed out in running state. Transitioning back to idle")
       context.unwatch(active.taskActor)
@@ -116,7 +130,7 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
     case Event(RequestWorkEvent, active: ActiveCommander) =>
       active.workPreference match {
         case Some(prefer) =>
-          delegator ! RequestForPreferredWork(prefer)
+          delegator ! RequestForPreferredWork(channelActor, prefer)
           stay()
 
         case None =>
@@ -168,19 +182,20 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
     case StopEvent(_, LoadingCode, WaitingForJars(execution)) =>
       stopPollingForWork()
       context.stop(context.unwatch(jarLoadingActor))
-      context.stop(context.unwatch(execution.channelActor))
       log.info("WorkerFSM stopped successfully")
 
     case StopEvent(_, _, active: ActiveCommander) =>
       stopPollingForWork()
       context.stop(context.unwatch(jarLoadingActor))
-      Option(active.taskActor).map( context.unwatch(_) )
+      Option(active.taskActor).foreach(a => context.unwatch(a))
       Await.result(gracefulStop(active.commander, config.workerShutdownTimeout), config.workerShutdownTimeout)
+      context.stop(context.unwatch(channelActor))
       log.info("WorkerFSM stopped successfully")
 
     case StopEvent(_, _, _) =>
       stopPollingForWork()
       context.stop(context.unwatch(jarLoadingActor))
+      context.stop(context.unwatch(channelActor))
       log.info("WorkerFSM stopped successfully")
   }
 
@@ -222,6 +237,14 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
         ActiveCommander(commander, taskActor, None)
     }
   }
+
+  def initializeWorkerChannel(channel: Channel, actor: ActorRef) : Unit = {
+    channel.addShutdownListener(new ShutdownListener {
+      override def shutdownCompleted(cause: ShutdownSignalException): Unit = {
+        self ! cause
+      }
+    })
+  }
 }
 
 object WorkerFSM {
@@ -249,7 +272,7 @@ object WorkerFSM {
     commander:  ActorRef,
     taskActor:  ActorRef,
     affinity:   Option[WorkerAffinity]
-    ) extends CommanderState {
+  ) extends CommanderState {
 
     def workPreference: Option[ExecutableIntegration] = affinity match {
       case Some(value) if !value.isExpired() => Some(value.integration)

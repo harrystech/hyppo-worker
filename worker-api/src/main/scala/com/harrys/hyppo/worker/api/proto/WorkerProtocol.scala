@@ -85,7 +85,7 @@ final case class CreateIngestionTasksRequest
   override val integration: ExecutableIntegration,
   override val executionId: UUID,
   override val resources: Seq[WorkResource],
-  job: DataIngestionJob,
+  job: DataIngestionJob
 ) extends IntegrationWorkerInput
 
 @SerialVersionUID(1L)

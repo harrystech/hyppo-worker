@@ -1,9 +1,6 @@
 package com.harrys.hyppo.worker.actor.queue
 
-import com.harrys.hyppo.worker.actor.amqp.{AMQPMessageProperties, QueueNaming}
-import com.harrys.hyppo.worker.actor.sync.ResourceNegotiation.{ResourceUnavailable, ResourceAcquisitionResult, AcquiredResourceLeases}
-import com.harrys.hyppo.worker.actor.sync.ThrottledResourceLease
-import com.harrys.hyppo.worker.api.proto.{ThrottledWorkResource, ConcurrencyWorkResource, WorkResource}
+import com.harrys.hyppo.worker.api.proto.{ConcurrencyWorkResource, ThrottledWorkResource, WorkResource}
 import com.rabbitmq.client.Channel
 
 import scala.collection.mutable.ArrayBuffer
@@ -11,7 +8,7 @@ import scala.collection.mutable.ArrayBuffer
 /**
   * Created by jpetty on 11/6/15.
   */
-final class ResourceManagement {
+final class ResourceLeasing {
 
   def leaseResources(channel: Channel, resources: Seq[WorkResource]) : Either[AcquiredResourceLeases, ResourceUnavailable] = {
     val result: Either[AcquiredResourceLeases, ResourceUnavailable] = Left(AcquiredResourceLeases(Seq()))
@@ -22,15 +19,11 @@ final class ResourceManagement {
             Left(AcquiredResourceLeases(acquired.leases :+ lease))
           case None =>
             //  Rollback all previously acquired resources
-            releaseResources(channel, acquired)
+            acquired.releaseAll()
             Right(ResourceUnavailable(resource))
         }
       }
     }
-  }
-
-  def releaseResources(channel: Channel, resources: AcquiredResourceLeases) : Unit = {
-    resources.leases.foreach(r => releaseResource(channel, r))
   }
 
   private def leaseResource(channel: Channel, request: WorkResource) : Option[ResourceLease] = request match {
@@ -43,7 +36,7 @@ final class ResourceManagement {
     if (response == null) {
       None
     } else {
-      Some(ConcurrencyResourceLease(resource, response))
+      Some(ConcurrencyResourceLease(resource, channel, response))
     }
   }
 
@@ -52,26 +45,8 @@ final class ResourceManagement {
     if (response == null){
       None
     } else {
-      Some(ThrottledResourceLease(resource, response))
+      Some(ThrottledResourceLease(resource, channel, response))
     }
-  }
-
-  private def releaseResource(channel: Channel, lease: ResourceLease) : Unit = lease match {
-    case c: ConcurrencyResourceLease => releaseConcurrencyResource(channel, c)
-    case t: ThrottledResourceLease   => releaseThrottledResource(channel, t)
-  }
-
-  private def releaseConcurrencyResource(channel: Channel, lease: ConcurrencyResourceLease) : Unit = {
-    channel.basicReject(lease.deliveryTag, true)
-  }
-
-  private def releaseThrottledResource(channel: Channel, lease: ThrottledResourceLease) : Unit = {
-    val props = AMQPMessageProperties.throttleTokenProperties(lease.resource)
-    val body  = Array[Byte]()
-    channel.txSelect()
-    channel.basicAck(lease.deliveryTag, false)
-    channel.basicPublish("", lease.resource.deferredQueueName, true, false, props, body)
-    channel.txCommit()
   }
 
   /**

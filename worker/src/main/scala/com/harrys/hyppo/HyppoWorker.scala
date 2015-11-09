@@ -2,12 +2,13 @@ package com.harrys.hyppo
 
 import akka.actor._
 import akka.pattern.gracefulStop
+import akka.util.Timeout
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.util.ConfigUtils
 import com.harrys.hyppo.worker.actor.WorkerFSM
-import com.harrys.hyppo.worker.actor.amqp.{RabbitQueueStatusActor, WorkDelegation}
-import com.harrys.hyppo.worker.actor.sync.ResourceLeaseAgent
-import com.thenewmotion.akka.rabbitmq.ConnectionActor
+import com.harrys.hyppo.worker.actor.amqp.{QueueHelpers, RabbitQueueStatusActor}
+import com.harrys.hyppo.worker.actor.queue.WorkDelegation
+import com.thenewmotion.akka.rabbitmq._
 import com.typesafe.config.Config
 
 import scala.concurrent.duration._
@@ -21,16 +22,18 @@ final class HyppoWorker(val system: ActorSystem, val settings: WorkerConfig) {
   def this(system: ActorSystem, config: Config) = this(system, new WorkerConfig(config))
 
   val connection = system.actorOf(ConnectionActor.props(settings.rabbitMQConnectionFactory, reconnectionDelay = settings.rabbitMQTimeout), name = "rabbitmq")
-  val leaseActor = system.actorOf(Props(classOf[ResourceLeaseAgent], settings, connection), "lease-actor")
-  val delegation = system.actorOf(Props(classOf[WorkDelegation], settings, connection), "delegation")
+  //  Kick off baseline queue creation
+  HyppoCoordinator.initializeBaseQueues(settings, system, connection)
+  val delegation = system.actorOf(Props(classOf[WorkDelegation], settings), "delegation")
   val queueStats = system.actorOf(Props(classOf[RabbitQueueStatusActor], settings, delegation), "queue-stats")
   val workerFSMs = (1 to settings.workerCount).inclusive.map(i => {
-    system.actorOf(Props(classOf[WorkerFSM], settings, delegation), "worker-%02d".format(i))
+    system.actorOf(Props(classOf[WorkerFSM], settings, delegation, connection), "worker-%02d".format(i))
   })
+
+
 
   system.registerOnTermination({
     delegation ! Lifecycle.ImpendingShutdown
-    leaseActor ! Lifecycle.ImpendingShutdown
     queueStats ! PoisonPill
     val workerWait  = FiniteDuration(settings.shutdownTimeout.mul(0.8).toMillis, MILLISECONDS)
     val futures     = workerFSMs.map(ref => gracefulStop(ref, workerWait, Lifecycle.ImpendingShutdown))

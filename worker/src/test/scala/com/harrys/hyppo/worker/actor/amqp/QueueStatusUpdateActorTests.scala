@@ -2,13 +2,13 @@ package com.harrys.hyppo.worker.actor.amqp
 
 import akka.actor.PoisonPill
 import akka.testkit.TestActorRef
-import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.TestConfig
+import com.harrys.hyppo.worker.actor.RabbitMQTests
 
 /**
  * Created by jpetty on 9/16/15.
  */
-class QueueStatusUpdateActorTests extends RabbitMQTests(new WorkerConfig(TestConfig.basicTestConfig)) {
+class QueueStatusUpdateActorTests extends RabbitMQTests("QueueStatusUpdateActorTests", TestConfig.workerWithRandomQueuePrefix()) {
 
   "The QueueStatusActor" must {
     val status = TestActorRef(new RabbitQueueStatusActor(config, self))

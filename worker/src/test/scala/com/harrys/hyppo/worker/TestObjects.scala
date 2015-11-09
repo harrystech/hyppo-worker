@@ -35,5 +35,4 @@ object TestObjects {
     val code   = IntegrationCode(classOf[ProcessedDataStub].getCanonicalName, Seq())
     ExecutableIntegration(source, schema, code, IntegrationDetails(isRawDataIntegration = false, persistingSemantics = semantics, 1))
   }
-
 }

@@ -4,11 +4,10 @@ import java.security.MessageDigest
 import java.time.Duration
 import java.util.regex.Pattern
 
-import akka.util.HashCode
 import com.harrys.hyppo.config.HyppoConfig
-import com.harrys.hyppo.worker.actor.queue.ResourceManagement
+import com.harrys.hyppo.worker.actor.queue.ResourceLeasing
 import com.harrys.hyppo.worker.api.code.ExecutableIntegration
-import com.harrys.hyppo.worker.api.proto.{WorkResource, IntegrationWorkerInput, ConcurrencyWorkResource, ThrottledWorkResource}
+import com.harrys.hyppo.worker.api.proto.{ConcurrencyWorkResource, IntegrationWorkerInput, ThrottledWorkResource, WorkResource}
 import org.apache.commons.codec.binary.Hex
 import org.apache.commons.io.Charsets
 
@@ -24,11 +23,15 @@ final class QueueNaming(config: HyppoConfig) {
   val expiredQueueName: String = s"$prefix.expired"
 
   def integrationWorkQueueName(input: IntegrationWorkerInput) : String = {
-    val base = integrationQueueBaseName(input.integration)
-    if (input.resources.isEmpty){
+    integrationWorkQueueName(input.integration, input.resources)
+  }
+
+  def integrationWorkQueueName(integration: ExecutableIntegration, resources: Seq[WorkResource]) : String = {
+    val base = integrationQueueBaseName(integration)
+    if (resources.isEmpty){
       base
     } else {
-      s"$base.${resourceUniqueSuffix(input.resources)}"
+      s"$base.${resourceUniqueSuffix(resources)}"
     }
   }
 
@@ -41,6 +44,16 @@ final class QueueNaming(config: HyppoConfig) {
 
   def isIntegrationQueueName(name: String) : Boolean = {
     name.startsWith(integrationPrefix)
+  }
+
+  def filterForIntegration(integration: ExecutableIntegration, queues: Iterable[String]) : Iterable[String] = {
+    val filter = belongsToIntegration(integration) _
+    queues.filter(filter)
+  }
+
+  def belongsToIntegration(integration: ExecutableIntegration)(toCheck: String) : Boolean = {
+    val prefix = integrationQueueBaseName(integration)
+    toCheck.startsWith(prefix)
   }
 
   private val concurrencyResourcePrefix: String = s"$prefix.resource.concurrency"
@@ -66,19 +79,15 @@ final class QueueNaming(config: HyppoConfig) {
     cleanupPattern.matcher(input).replaceAll("_")
   }
 
-  private val resourceManagement = new ResourceManagement
+  private val resourceManagement = new ResourceLeasing
   private def resourceUniqueSuffix(resources: Seq[WorkResource]) : String = {
     if (resources.isEmpty){
       ""
     } else {
       val digest = MessageDigest.getInstance("MD5")
-      resourceManagement.resourceAcquisitionOrder(resources).foreach {
-        case c: ConcurrencyWorkResource =>
-          digest.update('c')
-          digest.update(c.resourceName.getBytes(Charsets.UTF_8))
-        case t: ThrottledWorkResource =>
-          digest.update('t')
-          digest.update(t.resourceName.getBytes(Charsets.UTF_8))
+      resourceManagement.resourceAcquisitionOrder(resources).foreach { resource =>
+        digest.update(resource.getClass.getName.getBytes(Charsets.UTF_8))
+        digest.update(resource.resourceName.getBytes(Charsets.UTF_8))
       }
       Hex.encodeHexString(digest.digest()).substring(0, 8)
     }

@@ -43,6 +43,8 @@ abstract class HyppoConfig(config: Config) extends Serializable {
   //  Amount of time to allow queues to linger in an inactive state
   final val workQueueTTL: FiniteDuration = Duration(config.getDuration("hyppo.work-queue.queue-ttl").toMillis, MILLISECONDS)
 
+  final val allQueuesEphemeral: Boolean = config.getBoolean("hyppo.work-queue.all-ephemeral")
+
   //  The amount of time to allow for a graceful stop before forced termination
   final val shutdownTimeout: FiniteDuration = Duration(config.getDuration("hyppo.shutdown-timeout").toMillis, MILLISECONDS)
 

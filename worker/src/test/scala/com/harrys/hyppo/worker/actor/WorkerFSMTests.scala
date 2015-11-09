@@ -8,18 +8,18 @@ import com.harrys.hyppo.worker.TestConfig
 /**
  * Created by jpetty on 8/18/15.
  */
-class WorkerFSMTests extends WorkerActorTests {
+class WorkerFSMTests extends WorkerActorTests(new WorkerConfig(TestConfig.basicTestConfig)) {
 
   override def localTestCleanup() : Unit = {}
 
   "The WorkerFSM" must {
-    val workerFSM = TestFSMRef(new WorkerFSM(new WorkerConfig(TestConfig.basicTestConfig), self))
+    val workerFSM = TestFSMRef(new WorkerFSM(config, self, connectionActor))
 
     "start in the idle state" in {
       workerFSM.stateName shouldEqual WorkerFSM.Idle
     }
     "poll for work immediately" in {
-      expectMsg(RequestForAnyWork)
+      expectMsgType[RequestForAnyWork]
     }
     "activate the polling timer" in {
       workerFSM.isTimerActive(WorkerFSM.PollingTimerName) shouldBe true

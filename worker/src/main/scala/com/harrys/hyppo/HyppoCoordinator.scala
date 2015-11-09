@@ -4,12 +4,13 @@ import javax.inject.{Inject, Singleton}
 
 import akka.actor._
 import akka.pattern.gracefulStop
-import com.harrys.hyppo.config.CoordinatorConfig
+import akka.util.Timeout
+import com.harrys.hyppo.config.{HyppoConfig, CoordinatorConfig}
 import com.harrys.hyppo.coordinator.{WorkDispatcher, WorkResponseHandler}
 import com.harrys.hyppo.util.ConfigUtils
-import com.harrys.hyppo.worker.actor.amqp.{EnqueueWorkQueueProxy, QueueStatusInfo, ResponseQueueConsumer}
+import com.harrys.hyppo.worker.actor.amqp.{QueueHelpers, EnqueueWorkQueueProxy, QueueStatusInfo, ResponseQueueConsumer}
 import com.harrys.hyppo.worker.api.proto.WorkerInput
-import com.thenewmotion.akka.rabbitmq.ConnectionActor
+import com.thenewmotion.akka.rabbitmq._
 import com.typesafe.config.Config
 
 import scala.concurrent.Await
@@ -21,6 +22,7 @@ import scala.concurrent.Await
 final class HyppoCoordinator @Singleton() @Inject() (system: ActorSystem, config: CoordinatorConfig, handler: WorkResponseHandler) extends WorkDispatcher {
   private val rabbitMQApi     = config.newRabbitMQApiClient()
   private val connectionActor = system.actorOf(ConnectionActor.props(config.rabbitMQConnectionFactory, reconnectionDelay = config.rabbitMQTimeout), name = "rabbitmq")
+  HyppoCoordinator.initializeBaseQueues(config, system, connectionActor)
   private val responseActor   = system.actorOf(Props(classOf[ResponseQueueConsumer], config, connectionActor, handler), name = "responses")
   private val enqueueProxy    = system.actorOf(Props(classOf[EnqueueWorkQueueProxy], config, connectionActor), name = "enqueue-proxy")
 
@@ -62,4 +64,20 @@ object HyppoCoordinator {
   def requiredConfig(): Config = ConfigUtils.resourceFileConfig("/com/harrys/hyppo/config/required.conf")
 
   def referenceConfig(): Config = ConfigUtils.resourceFileConfig("/com/harrys/hyppo/config/reference.conf")
+
+  def initializeBaseQueues(config: HyppoConfig, system: ActorSystem, connection: ActorRef) : Unit = {
+    import akka.pattern.ask
+    import system.dispatcher
+    implicit val timeout = Timeout(config.rabbitMQTimeout)
+    (connection ? CreateChannel(ChannelActor.props(), name = Some("init-channel"))).collect {
+      case ChannelCreated(actor) =>
+        actor ! ChannelMessage(channel => {
+          val helpers = new QueueHelpers(config)
+          helpers.createExpiredQueue(channel)
+          helpers.createGeneralWorkQueue(channel)
+          helpers.createResultsQueue(channel)
+        }, dropIfNoChannel = false)
+        actor ! PoisonPill
+    }
+  }
 }

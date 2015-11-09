@@ -1,12 +1,11 @@
 package com.harrys.hyppo.worker.actor
 
-import java.time.LocalDateTime
-import java.util.UUID
-
 import akka.actor.{ActorRef, ActorSystem}
-import com.harrys.hyppo.worker.actor.amqp.{AMQPMessageProperties, AMQPSerialization, RabbitQueueItem, WorkQueueItem}
+import com.harrys.hyppo.util.TimeUtils
+import com.harrys.hyppo.worker.actor.amqp.{AMQPMessageProperties, AMQPSerialization}
+import com.harrys.hyppo.worker.actor.queue.{AcquiredResourceLeases, QueueItemHeaders, WorkQueueExecution, WorkQueueItem}
 import com.harrys.hyppo.worker.api.proto.WorkerInput
-import com.rabbitmq.client.{Envelope, GetResponse}
+import com.rabbitmq.client.{Channel, Envelope, GetResponse}
 import org.mockito.Mockito._
 import org.scalatest.mock.MockitoSugar
 
@@ -29,19 +28,30 @@ object TestAmqp extends MockitoSugar {
     val get        = mock[GetResponse]
     val envelope   = mock[Envelope]
       when(envelope.getDeliveryTag).thenReturn(nextDeliveryTag)
+      when(envelope.getExchange).thenReturn("")
     when(get.getEnvelope).thenReturn(envelope)
-    when(get.getProps).thenReturn(AMQPMessageProperties.enqueueProperties(UUID.randomUUID, "", LocalDateTime.now(), Duration(10, MINUTES)))
+    when(get.getProps).thenReturn(AMQPMessageProperties.enqueueProperties(input.executionId, "", TimeUtils.currentLocalDateTime(), TimeUtils.javaDuration(Duration(10, MINUTES))))
     when(get.getBody).thenReturn(serializer.serialize(input))
 
     get
   }
 
-
-  def fakeRabbitQueueItem(channel: ActorRef, input: WorkerInput)(implicit system: ActorSystem) : RabbitQueueItem = {
-    RabbitQueueItem(channel, fakeAmqpQueueItem(input))
+  def fakeQueueItemHeaders(input: WorkerInput) : QueueItemHeaders = {
+    val properties = AMQPMessageProperties.enqueueProperties(input.executionId, "", TimeUtils.currentLocalDateTime(), TimeUtils.javaDuration(Duration(10, MINUTES)))
+    val envelope   = mock[Envelope]
+    when(envelope.getDeliveryTag).thenReturn(nextDeliveryTag)
+    when(envelope.getExchange).thenReturn("")
+    new QueueItemHeaders(envelope, properties)
   }
 
   def fakeWorkQueueItem(channel: ActorRef, input: WorkerInput)(implicit system: ActorSystem) : WorkQueueItem = {
-    WorkQueueItem(fakeRabbitQueueItem(channel, input), input)
+    val headers = fakeQueueItemHeaders(input)
+    WorkQueueItem(headers, input)
+  }
+
+
+  def fakeWorkQueueExecution(channel: Channel, input: WorkerInput)(implicit system: ActorSystem) : WorkQueueExecution = {
+    val headers = fakeQueueItemHeaders(input)
+    WorkQueueExecution(channel, headers, input, AcquiredResourceLeases(Seq()))
   }
 }
