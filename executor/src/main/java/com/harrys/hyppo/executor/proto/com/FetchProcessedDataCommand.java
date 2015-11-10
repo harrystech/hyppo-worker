@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto.com;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.StartOperationCommand;
 import com.harrys.hyppo.source.api.model.DataIngestionTask;
 import org.codehaus.jackson.annotate.JsonCreator;
@@ -19,7 +19,7 @@ public final class FetchProcessedDataCommand extends StartOperationCommand {
     public FetchProcessedDataCommand(
             @JsonProperty("task") final DataIngestionTask task
     ){
-        super(OperationType.FetchProcessedData);
+        super(ExecutorOperation.FetchProcessedData);
         this.task = task;
     }
 

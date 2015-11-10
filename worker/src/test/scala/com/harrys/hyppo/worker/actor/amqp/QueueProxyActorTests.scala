@@ -1,41 +1,31 @@
 package com.harrys.hyppo.worker.actor.amqp
 
-import akka.testkit.TestActorRef
-import com.harrys.hyppo.config.CoordinatorConfig
-import com.harrys.hyppo.worker.{TestObjects, TestConfig}
-import com.harrys.hyppo.worker.api.proto.CreateIngestionTasksRequest
+import java.util.UUID
 
-import scala.util.Try
+import akka.testkit.TestActorRef
+import com.harrys.hyppo.worker.actor.RabbitMQTests
+import com.harrys.hyppo.worker.api.proto.CreateIngestionTasksRequest
+import com.harrys.hyppo.worker.{TestConfig, TestObjects}
 
 /**
  * Created by jpetty on 9/17/15.
  */
-class QueueProxyActorTests extends RabbitMQTests  {
-
-  val config = new CoordinatorConfig(TestConfig.basicTestConfig)
+class QueueProxyActorTests extends RabbitMQTests("QueueProxyActorTests", TestConfig.coordinatorWithRandomQueuePrefix())  {
 
 
   "The Queue Proxy" must {
-    val proxy = TestActorRef(new RabbitWorkQueueProxy(config))
+    val proxy = TestActorRef(new EnqueueWorkQueueProxy(config, connectionActor))
 
     "successfully enqueue messages" in {
       val source      =  TestObjects.testIngestionSource(name = "queue proxy")
       val integration = TestObjects.testProcessedDataIntegration(source)
-      val work        = CreateIngestionTasksRequest(integration, TestObjects.testIngestionJob(source))
-      val connection  = config.rabbitMQConnectionFactory.newConnection()
-      val channel     = connection.createChannel()
-      val queueName = HyppoQueue.integrationQueueName(integration)
+      val testJob     = TestObjects.testIngestionJob(source)
+      val work        = CreateIngestionTasksRequest(integration, UUID.randomUUID(), Seq(), testJob)
+      val queueName   = naming.integrationWorkQueueName(work)
 
-      try {
-        channel.queueDelete(queueName)
-        proxy ! work
-        within(config.rabbitMQTimeout){
-          awaitAssert(channel.queueDeclarePassive(queueName).getMessageCount shouldBe 1)
-        }
-      } finally {
-        Try(channel.queueDelete(queueName))
-        Try(channel.close())
-        Try(connection.close())
+      proxy ! work
+      within(config.rabbitMQTimeout){
+        awaitAssert(helpers.checkQueueSize(connection, queueName) shouldBe 1)
       }
     }
   }

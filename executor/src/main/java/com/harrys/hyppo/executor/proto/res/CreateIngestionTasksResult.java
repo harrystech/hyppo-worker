@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto.res;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.OperationResult;
 import com.harrys.hyppo.source.api.model.DataIngestionJob;
 import com.harrys.hyppo.source.api.model.DataIngestionTask;
@@ -26,7 +26,7 @@ public final class CreateIngestionTasksResult extends OperationResult {
             @JsonProperty("job")            final DataIngestionJob job,
             @JsonProperty("createdTasks")   final List<DataIngestionTask> createdTasks
     ){
-        super(OperationType.CreateIngestionTasks);
+        super(ExecutorOperation.CreateIngestionTasks);
         this.job = job;
         this.createdTasks = createdTasks;
     }

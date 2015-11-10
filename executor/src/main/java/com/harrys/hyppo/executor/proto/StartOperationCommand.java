@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.com.*;
 import org.codehaus.jackson.annotate.*;
 
@@ -21,24 +21,25 @@ import java.io.Serializable;
         @JsonSubTypes.Type(value = FetchRawDataCommand.class,           name = "FetchRawDataCommand"),
         @JsonSubTypes.Type(value = PersistProcessedDataCommand.class,   name = "PersistProcessedDataCommand"),
         @JsonSubTypes.Type(value = ProcessRawDataCommand.class,         name = "ProcessRawDataCommand"),
-        @JsonSubTypes.Type(value = ValidateIntegrationCommand.class,    name = "ValidateIntegrationCommand")
+        @JsonSubTypes.Type(value = ValidateIntegrationCommand.class,    name = "ValidateIntegrationCommand"),
+        @JsonSubTypes.Type(value = HandleJobCompletedCommand.class,     name = "HandleJobCompletedCommand")
 })
 @JsonIgnoreProperties(ignoreUnknown = true)
 public abstract class StartOperationCommand implements Serializable {
 
-    protected final OperationType operationType;
+    protected final ExecutorOperation operationType;
 
-    protected StartOperationCommand(final OperationType type){
+    protected StartOperationCommand(final ExecutorOperation type){
         this.operationType = type;
     }
 
     @JsonProperty("operationType")
-    public final OperationType getOperationType(){
+    public final ExecutorOperation getOperationType(){
         return this.operationType;
     }
 
     @JsonIgnore
     public final boolean isExitCommand(){
-        return this.operationType == OperationType.Exit;
+        return this.operationType == ExecutorOperation.Exit;
     }
 }

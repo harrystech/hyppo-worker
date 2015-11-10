@@ -12,7 +12,9 @@ import scala.util.{Failure, Success}
  */
 object RabbitQueueStatusActor {
   //  Used to refresh the queue status information
-  final case class QueueStatusUpdate(statuses: Seq[QueueStatusInfo])
+  final case class QueueStatusUpdate(statuses: Seq[SingleQueueDetails])
+  //  Used to provide partial updates about queue status after a dequeue event
+  final case class PartialStatusUpdate(name: String, size: Int)
 }
 
 final class RabbitQueueStatusActor(config: WorkerConfig, delegator: ActorRef) extends Actor with ActorLogging {
@@ -23,6 +25,8 @@ final class RabbitQueueStatusActor(config: WorkerConfig, delegator: ActorRef) ex
 
   //  Establish a death-pact with the delegator
   context.watch(delegator)
+
+  val naming = new QueueNaming(config)
 
   //  Used internally by a timer event to trigger refreshes of the queue status info
   private case object RefreshQueueStatsEvent
@@ -41,9 +45,9 @@ final class RabbitQueueStatusActor(config: WorkerConfig, delegator: ActorRef) ex
     case RefreshQueueStatsEvent =>
       Future({
         val statuses = blocking {
-          httpClient.fetchQueueStatusInfo()
+          httpClient.fetchRawHyppoQueueDetails()
         }
-        QueueStatusUpdate(statuses.filter(_.name.startsWith(HyppoQueue.IntegrationQueuePrefix)))
+        QueueStatusUpdate(statuses.filter(s => naming.isIntegrationQueueName(s.queueName)))
       }).onComplete({
         case Success(update) =>
           log.debug(s"Sending queue status update: ${ update }")

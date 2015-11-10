@@ -2,16 +2,16 @@ package com.harrys.hyppo.worker.actor.amqp
 
 import akka.actor.PoisonPill
 import akka.testkit.TestActorRef
-import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.TestConfig
+import com.harrys.hyppo.worker.actor.RabbitMQTests
 
 /**
  * Created by jpetty on 9/16/15.
  */
-class QueueStatusUpdateActorTests extends RabbitMQTests {
+class QueueStatusUpdateActorTests extends RabbitMQTests("QueueStatusUpdateActorTests", TestConfig.workerWithRandomQueuePrefix()) {
 
   "The QueueStatusActor" must {
-    val status = TestActorRef(new RabbitQueueStatusActor(new WorkerConfig(TestConfig.basicTestConfig), self))
+    val status = TestActorRef(new RabbitQueueStatusActor(config, self))
 
     "schedule a timer to refresh queue information" in {
       status.underlyingActor.statusTimer.isCancelled shouldBe false

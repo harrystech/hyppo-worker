@@ -5,7 +5,9 @@ import akka.pattern.gracefulStop
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.util.ConfigUtils
 import com.harrys.hyppo.worker.actor.WorkerFSM
-import com.harrys.hyppo.worker.actor.amqp.{RabbitQueueStatusActor, RabbitWorkerDelegation}
+import com.harrys.hyppo.worker.actor.amqp.RabbitQueueStatusActor
+import com.harrys.hyppo.worker.actor.queue.WorkDelegation
+import com.thenewmotion.akka.rabbitmq._
 import com.typesafe.config.Config
 
 import scala.concurrent.duration._
@@ -18,18 +20,24 @@ final class HyppoWorker(val system: ActorSystem, val settings: WorkerConfig) {
 
   def this(system: ActorSystem, config: Config) = this(system, new WorkerConfig(config))
 
-  val delegation = system.actorOf(Props(classOf[RabbitWorkerDelegation], settings), "delegation")
+  val connection = system.actorOf(ConnectionActor.props(settings.rabbitMQConnectionFactory, reconnectionDelay = settings.rabbitMQTimeout), name = "rabbitmq")
+  //  Kick off baseline queue creation
+  HyppoCoordinator.initializeBaseQueues(settings, system, connection)
+  val delegation = system.actorOf(Props(classOf[WorkDelegation], settings), "delegation")
   val queueStats = system.actorOf(Props(classOf[RabbitQueueStatusActor], settings, delegation), "queue-stats")
   val workerFSMs = (1 to settings.workerCount).inclusive.map(i => {
-    system.actorOf(Props(classOf[WorkerFSM], settings, delegation), "worker-%02d".format(i))
+    system.actorOf(Props(classOf[WorkerFSM], settings, delegation, connection), "worker-%02d".format(i))
   })
+
+
 
   system.registerOnTermination({
     delegation ! Lifecycle.ImpendingShutdown
     queueStats ! PoisonPill
-    val futures = workerFSMs.map(ref => gracefulStop(ref, Duration(6, SECONDS), Lifecycle.ImpendingShutdown))
+    val workerWait  = FiniteDuration(settings.shutdownTimeout.mul(0.8).toMillis, MILLISECONDS)
+    val futures     = workerFSMs.map(ref => gracefulStop(ref, workerWait, Lifecycle.ImpendingShutdown))
     implicit val ec = system.dispatcher
-    Await.result(Future.sequence(futures), Duration(8, SECONDS))
+    Await.result(Future.sequence(futures), settings.shutdownTimeout)
   })
 
   def awaitSystemTermination() : Unit = system.awaitTermination()

@@ -1,9 +1,9 @@
 package com.harrys.hyppo.worker
 
-import com.harrys.hyppo.source.api.{ProcessedDataIntegration, ValidationResult}
 import com.harrys.hyppo.source.api.data.AvroRecordType
-import com.harrys.hyppo.source.api.model.{DataIngestionTask, IngestionSource, DataIngestionJob}
+import com.harrys.hyppo.source.api.model.{DataIngestionJob, DataIngestionTask, IngestionSource}
 import com.harrys.hyppo.source.api.task._
+import com.harrys.hyppo.source.api.{ProcessedDataIntegration, ValidationResult}
 import com.harrys.hyppo.worker.rt.data.TestRecord
 import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory

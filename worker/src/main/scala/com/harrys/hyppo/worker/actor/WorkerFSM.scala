@@ -1,16 +1,18 @@
 package com.harrys.hyppo.worker.actor
 
 import akka.actor._
-import akka.pattern.{ask, gracefulStop}
+import akka.pattern.gracefulStop
 import akka.util.Timeout
-import com.github.sstone.amqp.Amqp.{Error, Ok}
 import com.harrys.hyppo.Lifecycle
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.actor.WorkerFSM._
-import com.harrys.hyppo.worker.actor.amqp.{SingleTaskActor, WorkQueueItem}
+import com.harrys.hyppo.worker.actor.queue.WorkQueueExecution
+import com.harrys.hyppo.worker.actor.task.TaskFSM
 import com.harrys.hyppo.worker.api.code.ExecutableIntegration
 import com.harrys.hyppo.worker.api.proto.{GeneralWorkerInput, IntegrationWorkerInput}
 import com.harrys.hyppo.worker.cache.{JarLoadingActor, LoadedJarFile}
+import com.rabbitmq.client.{ShutdownListener, ShutdownSignalException}
+import com.thenewmotion.akka.rabbitmq._
 import org.apache.commons.io.FileUtils
 
 import scala.concurrent.Await
@@ -18,52 +20,90 @@ import scala.concurrent.duration._
 import scala.util.Failure
 
 /**
- * Created by jpetty on 8/4/15.
+ * Created by jpetty on 10/30/15.
  */
-final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends LoggingFSM[WorkerState, CommanderState] {
+final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: ActorRef) extends LoggingFSM[WorkerState, CommanderState] {
 
   val jarLoadingActor = context.watch(context.actorOf(Props(classOf[JarLoadingActor], config)))
+  val channelActor    = {
+    implicit val timeout = Timeout(config.rabbitMQTimeout)
+    context.watch(connection.createChannel(ChannelActor.props(initializeWorkerChannel)))
+  }
 
   override def logDepth: Int = 10
 
   startWith(Idle, Uninitialized)
 
+  /**
+    * [[WorkerFSM.Idle]] State Definition
+    */
   when (Idle) {
-
-    case Event(work: WorkQueueItem, _) =>
-      jarLoadingActor ! JarLoadingActor.LoadJars(work.input.code.jarFiles)
-      goto(LoadingCode) using WaitingForJars(work)
-
+    case Event(execution: WorkQueueExecution, _) =>
+      goto(LoadingCode) using WaitingForJars(execution)
     case Event(RequestWorkEvent, _) =>
-      delegator ! RequestForAnyWork
+      delegator ! RequestForAnyWork(channelActor)
       stay()
-
+    case Event(cause: ShutdownSignalException, _) =>
+      log.warning(s"Received channel shutdown message: ${ cause.getMessage }")
+      stay()
   }
 
+  //  When loading code, the WorkerFSM must initiate the request to download the necessary jars
+  onTransition {
+    case _ -> LoadingCode =>
+      val execution = nextStateData.asInstanceOf[WaitingForJars].execution
+      jarLoadingActor ! JarLoadingActor.LoadJars(execution.input.code.jarFiles)
+  }
+
+
+  /***
+    * [[WorkerFSM.LoadingCode]] Status Definition Block
+    */
   when (LoadingCode, stateTimeout = config.jarDownloadTimeout) {
-    case Event(JarLoadingActor.JarsResult(jars), WaitingForJars(work)) =>
-      if (jars.map(_.key) == work.input.code.jarFiles){
+    case Event(JarLoadingActor.JarsResult(jars), WaitingForJars(execution)) =>
+      if (jars.map(_.key) == execution.input.code.jarFiles){
         log.debug(s"Code successfully loaded. Launching commander")
-        goto(Running) using createCommanderActor(work, jars)
+        goto(Running) using createCommanderActor(execution, jars)
       } else {
         log.warning("Received unexpected code from jar loading actor. Deleting files and still waiting")
         jars.foreach(j => FileUtils.deleteQuietly(j.file))
         stay()
       }
 
-    case Event(Failure(cause), WaitingForJars(work)) =>
-      log.debug("Failed to load code for commander", cause)
-      sendNackToWorkItem(work)
+    case Event(channelError: ShutdownSignalException, WaitingForJars(execution)) =>
+      log.error(channelError, "Channel closed while loading code. Resources are automatically, released. Going to idle.")
       goto(Idle) using Uninitialized
 
-    case Event(StateTimeout, WaitingForJars(work)) =>
-      log.debug("Code loading timed out")
-      sendNackToWorkItem(work)
+    case Event(Failure(cause), WaitingForJars(execution)) =>
+      log.debug("Failed to load code for commander. Returning to idle", cause)
+      execution.withChannel(c => {
+        c.basicReject(execution.headers.deliveryTag, true)
+        execution.leases.releaseAll()
+      })
+      goto(Idle) using Uninitialized
+
+    case Event(Lifecycle.ImpendingShutdown, WaitingForJars(execution)) =>
+      log.debug("Failed to load code due to impending shutdown")
+      execution.withChannel(c => {
+        c.basicReject(execution.headers.deliveryTag, true)
+        execution.leases.releaseAll()
+      })
+      stop(FSM.Shutdown)
+
+    case Event(StateTimeout, WaitingForJars(execution)) =>
+      log.debug("Code loading timed out. Work will return to queue automatically")
+      execution.withChannel(c => {
+        c.basicReject(execution.headers.deliveryTag, true)
+        execution.leases.releaseAll()
+      })
       goto(Idle) using Uninitialized
   }
 
-  when (Running, stateTimeout = config.workTimeout) {
 
+  /**
+    * [[WorkerFSM.Running]] State Definition
+    */
+  when (Running, stateTimeout = config.workTimeout) {
     case Event(RequestWorkEvent, _) =>
       log.warning("Unexpected RequestWorkEvent received while processing. Likely a race-condition inside mailbox.")
       stay()
@@ -78,6 +118,12 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
           goto(Idle) using Uninitialized
       }
 
+    case Event(channelError: ShutdownSignalException, active: ActiveCommander) =>
+      log.error(channelError, "Channel closed while work was in progress. Killing commander.")
+      context.unwatch(active.taskActor)
+      context.stop(context.unwatch(active.commander))
+      goto(Idle) using Uninitialized
+
     case Event(StateTimeout, active: ActiveCommander) =>
       log.error("Current work timed out in running state. Transitioning back to idle")
       context.unwatch(active.taskActor)
@@ -85,12 +131,14 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
       goto(Idle) using Uninitialized
   }
 
+  /**
+    * [[WorkerFSM.Available]] State Definition
+    */
   when (Available) {
-
     case Event(RequestWorkEvent, active: ActiveCommander) =>
       active.workPreference match {
         case Some(prefer) =>
-          delegator ! RequestForPreferredWork(prefer)
+          delegator ! RequestForPreferredWork(channelActor, prefer)
           stay()
 
         case None =>
@@ -99,7 +147,12 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
           goto(Idle) using Uninitialized
       }
 
-    case Event(item @ WorkQueueItem(_, input: IntegrationWorkerInput), active @ ActiveCommander(commander, _, Some(affinity))) =>
+    case Event(channelError: ShutdownSignalException, active: ActiveCommander) =>
+      log.error(channelError, "Channel closed while in available state. Transitioning to idle until channel stabilizes")
+      context.stop(context.unwatch(active.commander))
+      goto(Idle) using Uninitialized
+
+    case Event(item @ WorkQueueExecution(_, _, input: IntegrationWorkerInput, _), active @ ActiveCommander(commander, _, Some(affinity))) =>
       if (active.isSameCode(input.integration)){
         log.debug(s"Reusing previous commander for pre-loaded integration: ${affinity.integration.sourceName}")
         val taskActor = createTaskActor(item, commander)
@@ -110,7 +163,7 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
         goto(LoadingCode) using WaitingForJars(item)
       }
 
-    case Event(item @ WorkQueueItem(_, input: GeneralWorkerInput), ActiveCommander(commander, _, _)) =>
+    case Event(item @ WorkQueueExecution(_, _, input: GeneralWorkerInput, _), ActiveCommander(commander, _, _)) =>
       log.debug(s"Restarting commander for general work request: ${input.integration.sourceName}")
       context.stop(commander)
       goto(LoadingCode) using WaitingForJars(item)
@@ -139,16 +192,26 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
   }
 
   onTermination {
+    case StopEvent(_, LoadingCode, WaitingForJars(execution)) =>
+      stopPollingForWork()
+      context.stop(context.unwatch(jarLoadingActor))
+      context.stop(context.unwatch(channelActor))
+      log.info("WorkerFSM stopped successfully")
+
     case StopEvent(_, _, active: ActiveCommander) =>
       stopPollingForWork()
       context.stop(context.unwatch(jarLoadingActor))
-      Option(active.taskActor).map( context.unwatch(_) )
-      Await.result(gracefulStop(active.commander, Duration(5, SECONDS)), Duration(5, SECONDS))
+      Option(active.taskActor).foreach(a => context.unwatch(a))
+      Await.result(gracefulStop(active.commander, config.workerShutdownTimeout), config.workerShutdownTimeout)
+      context.unwatch(channelActor)
+      channelActor ! PoisonPill
+      context.stop(context.unwatch(channelActor))
       log.info("WorkerFSM stopped successfully")
 
     case StopEvent(_, _, _) =>
       stopPollingForWork()
       context.stop(context.unwatch(jarLoadingActor))
+      context.stop(context.unwatch(channelActor))
       log.info("WorkerFSM stopped successfully")
   }
 
@@ -173,15 +236,15 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
 
   private var commanderCounter = 0
 
-  def createTaskActor(item: WorkQueueItem, commander: ActorRef) : ActorRef = {
-    context.watch(context.actorOf(Props(classOf[SingleTaskActor], config, item, commander)))
+  def createTaskActor(item: WorkQueueExecution, commander: ActorRef) : ActorRef = {
+    context.watch(context.actorOf(Props(classOf[TaskFSM], config, item, commander), name = "task-" + item.input.executionId.toString))
   }
 
-  def createCommanderActor(item: WorkQueueItem, jarFiles: Seq[LoadedJarFile]) : ActiveCommander = {
+  def createCommanderActor(execution: WorkQueueExecution, jarFiles: Seq[LoadedJarFile]) : ActiveCommander = {
     commanderCounter += 1
-    val commander = context.actorOf(Props(classOf[CommanderActor], config, item.input.code, jarFiles), name = "commander-" + commanderCounter)
-    val taskActor = createTaskActor(item, commander)
-    item.input match {
+    val commander = context.actorOf(Props(classOf[CommanderActor], config, execution.input.code, jarFiles), name = "commander-" + commanderCounter)
+    val taskActor = createTaskActor(execution, commander)
+    execution.input match {
       case work: IntegrationWorkerInput =>
         val affinity = WorkerAffinity(work.integration, Deadline.now + config.workAffinityTimeout)
         ActiveCommander(commander, taskActor, Some(affinity))
@@ -191,22 +254,17 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef) extends Logging
     }
   }
 
-  def sendNackToWorkItem(item: WorkQueueItem) : Unit = {
-    import context.dispatcher
-    implicit val timeout = Timeout(config.rabbitMQTimeout)
-    (item.rabbitItem.channel ? item.rabbitItem.createNack(requeue = true)).collect {
-      case Ok(_, _) =>
-        log.debug("Successfully sent NACK to Rabbit")
-      case Error(_, cause) =>
-        log.error(cause, "Failed to NACK work queue item")
-        self ! Failure(cause)
-    }
+  def initializeWorkerChannel(channel: Channel, actor: ActorRef) : Unit = {
+    channel.addShutdownListener(new ShutdownListener {
+      override def shutdownCompleted(cause: ShutdownSignalException): Unit = {
+        self ! cause
+      }
+    })
   }
 }
 
 object WorkerFSM {
   val PollingTimerName = "polling"
-
 
   sealed trait WorkerState
   case object Idle extends WorkerState
@@ -223,7 +281,7 @@ object WorkerFSM {
 
   case object Uninitialized extends CommanderState
 
-  final case class WaitingForJars(item: WorkQueueItem) extends CommanderState
+  final case class WaitingForJars(execution: WorkQueueExecution) extends CommanderState
 
   final case class ActiveCommander
   (

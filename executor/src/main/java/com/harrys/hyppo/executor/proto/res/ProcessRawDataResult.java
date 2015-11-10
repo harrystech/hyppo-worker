@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto.res;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.OperationResult;
 import com.harrys.hyppo.source.api.model.DataIngestionTask;
 import org.codehaus.jackson.annotate.JsonCreator;
@@ -29,7 +29,7 @@ public final class ProcessRawDataResult extends OperationResult {
             @JsonProperty("localDataFile")  final File localDataFile,
             @JsonProperty("recordCount")    final long recordCount
     ){
-        super(OperationType.ProcessRawData);
+        super(ExecutorOperation.ProcessRawData);
         this.task = task;
         this.localDataFile = localDataFile;
         this.recordCount   = recordCount;

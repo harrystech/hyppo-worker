@@ -2,7 +2,7 @@ package com.harrys.hyppo.worker.proto
 
 import com.harrys.hyppo.executor.proto.com.ValidateIntegrationCommand
 import com.harrys.hyppo.executor.proto.res.ValidateIntegrationResult
-import com.harrys.hyppo.worker.{ProcessedDataStub, TestObjects, RawDataStub}
+import com.harrys.hyppo.worker.{ProcessedDataStub, RawDataStub, TestObjects}
 import org.apache.avro.Schema
 
 import scala.concurrent.duration._

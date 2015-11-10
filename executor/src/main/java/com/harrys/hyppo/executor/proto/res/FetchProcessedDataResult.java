@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto.res;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.OperationResult;
 import com.harrys.hyppo.source.api.model.DataIngestionTask;
 import org.codehaus.jackson.annotate.JsonCreator;
@@ -29,7 +29,7 @@ public final class FetchProcessedDataResult extends OperationResult {
             @JsonProperty("localDataFile")  final File localDataFile,
             @JsonProperty("recordCount")    final long recordCount
     ){
-        super(OperationType.FetchProcessedData);
+        super(ExecutorOperation.FetchProcessedData);
         this.task = task;
         this.localDataFile = localDataFile;
         this.recordCount   = recordCount;

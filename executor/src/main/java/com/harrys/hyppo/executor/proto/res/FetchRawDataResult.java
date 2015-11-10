@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto.res;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.OperationResult;
 import com.harrys.hyppo.source.api.model.DataIngestionTask;
 import org.codehaus.jackson.annotate.JsonCreator;
@@ -26,7 +26,7 @@ public final class FetchRawDataResult extends OperationResult {
             @JsonProperty("task") final DataIngestionTask task,
             @JsonProperty("rawDataFiles") final List<File> rawDataFiles
     ) {
-        super(OperationType.FetchRawData);
+        super(ExecutorOperation.FetchRawData);
         this.task = task;
         this.rawDataFiles = rawDataFiles;
     }

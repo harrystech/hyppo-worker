@@ -1,6 +1,6 @@
 package com.harrys.hyppo.executor.proto.res;
 
-import com.harrys.hyppo.executor.OperationType;
+import com.harrys.hyppo.executor.ExecutorOperation;
 import com.harrys.hyppo.executor.proto.OperationResult;
 import com.harrys.hyppo.source.api.model.DataIngestionTask;
 import org.codehaus.jackson.annotate.JsonCreator;
@@ -19,7 +19,7 @@ public final class PersistProcessedDataResult extends OperationResult {
     public PersistProcessedDataResult(
             @JsonProperty("task") final DataIngestionTask task
     ) {
-        super(OperationType.PersistProcessedData);
+        super(ExecutorOperation.PersistProcessedData);
         this.task = task;
     }
 

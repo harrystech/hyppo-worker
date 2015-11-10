@@ -1,5 +1,6 @@
 package com.harrys.hyppo.worker.actor
 
+import akka.actor.ActorRef
 import com.harrys.hyppo.worker.api.code.ExecutableIntegration
 
 /**
@@ -7,6 +8,7 @@ import com.harrys.hyppo.worker.api.code.ExecutableIntegration
  */
 sealed trait RequestForWork extends Serializable
 @SerialVersionUID(1L)
-case object RequestForAnyWork extends RequestForWork
+final case class RequestForAnyWork(channel: ActorRef) extends RequestForWork
+
 @SerialVersionUID(1L)
-final case class RequestForPreferredWork(prefer: ExecutableIntegration) extends RequestForWork
+final case class RequestForPreferredWork(channel: ActorRef, prefer: ExecutableIntegration) extends RequestForWork
