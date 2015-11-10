@@ -50,7 +50,7 @@ final class TaskFSM
       goto(UploadingLogs)
 
     case Event(OperationResultAvailable(response), _) =>
-      log.info("Work results produced successfully. Awaiting log upload.")
+      log.info(s"${ execution.input.summaryString } produced results successfully")
       completeWithResponse(response)
       goto(UploadingLogs)
 
@@ -74,7 +74,7 @@ final class TaskFSM
 
   when(UploadingLogs) {
     case Event(OperationLogUploaded, _) =>
-      log.info(s"Work log item successfully uploaded")
+      log.debug(s"Work log item successfully uploaded")
       taskFullyCompleted()
 
     case Event(Terminated(actor), _) if actor.equals(commander) =>

@@ -17,7 +17,7 @@ sealed trait WorkerInput extends Product with Serializable { self =>
   def resources: Seq[WorkResource]
   def logicalOperation: LogicalOperation
   def summaryString: String = {
-    s"${self.productPrefix}(source=${source.getName})"
+    s"${self.productPrefix}(execution=${executionId.toString} source=${source.getName})"
   }
 }
 sealed trait IntegrationWorkerInput extends WorkerInput { self =>
@@ -26,7 +26,7 @@ sealed trait IntegrationWorkerInput extends WorkerInput { self =>
   override final def code: IntegrationCode   = integration.code
   override final def source: IngestionSource = integration.source
   override def summaryString: String = {
-    s"${self.productPrefix}(source=${source.getName} job=${job.getId.toString})"
+    s"${self.productPrefix}(execution=${executionId.toString} source=${source.getName} job=${job.getId.toString})"
   }
 }
 sealed trait GeneralWorkerInput extends WorkerInput {
