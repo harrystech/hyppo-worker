@@ -10,6 +10,8 @@ import com.harrys.hyppo.worker.actor.task.TaskFSMStatus.{PerformingOperation, Pr
 import com.harrys.hyppo.worker.api.proto.{FailureResponse, WorkerResponse}
 import com.thenewmotion.akka.rabbitmq.Channel
 
+import scala.util.Try
+
 /**
  * Created by jpetty on 10/29/15.
  */
@@ -54,7 +56,7 @@ final class TaskFSM
 
     case Event(Terminated(actor), _) if actor.equals(commander) =>
       log.error("Unexpected commander termination while operations were executing")
-      execution.leases.tryReleaseAll()
+      Try(execution.leases.releaseAll())
       stop(FSM.Failure("Commander actor died during execution"))
 
     case Event(ImpendingShutdown, _) =>

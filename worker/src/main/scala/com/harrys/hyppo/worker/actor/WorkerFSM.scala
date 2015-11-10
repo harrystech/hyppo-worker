@@ -2,6 +2,7 @@ package com.harrys.hyppo.worker.actor
 
 import akka.actor._
 import akka.pattern.gracefulStop
+import akka.util.Timeout
 import com.harrys.hyppo.Lifecycle
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.actor.WorkerFSM._
@@ -24,7 +25,10 @@ import scala.util.Failure
 final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: ActorRef) extends LoggingFSM[WorkerState, CommanderState] {
 
   val jarLoadingActor = context.watch(context.actorOf(Props(classOf[JarLoadingActor], config)))
-  val channelActor    = context.watch(connection.createChannel(ChannelActor.props(initializeWorkerChannel), name = Some("channel")))
+  val channelActor    = {
+    implicit val timeout = Timeout(config.rabbitMQTimeout)
+    context.watch(connection.createChannel(ChannelActor.props(initializeWorkerChannel)))
+  }
 
   override def logDepth: Int = 10
 

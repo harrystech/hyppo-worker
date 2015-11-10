@@ -70,7 +70,7 @@ final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging
     try {
       createExecutionItem(channel, worker, queues) match {
         case None =>
-          log.info("Failed to identify any valid work items for worker")
+          log.debug("Failed to identify any valid work items for worker")
         case Some(execution) =>
           log.info(s"Successfully created task execution: ${ execution.input.executionId }")
           worker ! execution

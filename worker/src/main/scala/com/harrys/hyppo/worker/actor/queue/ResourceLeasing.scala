@@ -19,7 +19,7 @@ final class ResourceLeasing {
             Left(AcquiredResourceLeases(acquired.leases :+ lease))
           case None =>
             //  Rollback all previously acquired resources
-            acquired.releaseAll()
+            acquired.releaseAllUnconsumed()
             Right(ResourceUnavailable(resource))
         }
       }

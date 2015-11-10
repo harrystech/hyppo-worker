@@ -99,12 +99,10 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
           val durable    = true
           val exclusive  = false
           val autoDelete = false
-          var arguments  = Map[String, AnyRef](
-            queueSizeHeader -> resource.concurrency.underlying()
+          val arguments  = Map[String, AnyRef](
+            queueSizeHeader -> resource.concurrency.underlying(),
+            queueTLLHeader  -> config.workQueueTTL.toMillis.underlying()
           )
-          if (config.allQueuesEphemeral){
-            arguments += (queueTLLHeader -> config.workQueueTTL.toMillis.underlying())
-          }
           channel.queueDeclare(resource.queueName, durable, exclusive, autoDelete, JavaConversions.mapAsJavaMap(arguments))
           populateConcurrencyResource(channel, resource)
           resource
@@ -217,24 +215,17 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
     val durable      = true
     val exclusive    = false
     val autoDelete   = false
-    var deferredArgs = Map[String, AnyRef](
+    val deferredArgs = Map[String, AnyRef](
       expiredExchangeHeader -> directExchange,
       expiredQueueHeader    -> resource.availableQueueName,
-      queueSizeHeader       -> 1.underlying()
+      queueSizeHeader       -> 1.underlying(),
+      queueTLLHeader        -> config.workQueueTTL.toMillis.underlying()
     )
-    if (config.allQueuesEphemeral){
-      deferredArgs += (queueTLLHeader -> config.workQueueTTL.toMillis.underlying())
-    }
-    val availableArgs =
-      if (config.allQueuesEphemeral){
-        JavaConversions.mapAsJavaMap(Map(
-          queueSizeHeader -> 1.underlying(),
-          queueTLLHeader  -> config.workQueueTTL.toMillis.underlying()
-        ))
-      } else {
-        null
-      }
-    val availableOk = channel.queueDeclare(resource.availableQueueName, durable, exclusive, autoDelete, availableArgs)
+    val availableArgs = Map[String, AnyRef](
+      queueSizeHeader -> 1.underlying(),
+      queueTLLHeader  -> config.workQueueTTL.toMillis.underlying()
+    )
+    val availableOk = channel.queueDeclare(resource.availableQueueName, durable, exclusive, autoDelete, JavaConversions.mapAsJavaMap(availableArgs))
     val deferredOk  = channel.queueDeclare(resource.deferredQueueName, durable, exclusive, autoDelete, JavaConversions.mapAsJavaMap(deferredArgs))
     (availableOk, deferredOk)
   }

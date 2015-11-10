@@ -15,6 +15,7 @@ sealed trait ResourceLease {
   def token: GetResponse
   def inspect: String
   def release() : Unit
+  def releaseUnconsumed(): Unit
   final def resourceName: String = resource.resourceName
   final def envelope: Envelope   = token.getEnvelope
   final def properties: BasicProperties = token.getProps
@@ -33,6 +34,8 @@ final case class ConcurrencyResourceLease
   override def release() : Unit = {
     channel.basicReject(deliveryTag, true)
   }
+
+  override def releaseUnconsumed() : Unit = release()
 }
 
 final case class ThrottledResourceLease
@@ -44,24 +47,26 @@ final case class ThrottledResourceLease
 
   override def inspect: String = s"${this.productPrefix}(name=$resourceName deliveryTag=$deliveryTag)"
 
+  override def releaseUnconsumed() : Unit = {
+    channel.basicReject(deliveryTag, true)
+  }
+
   override def release() : Unit = {
     val props = AMQPMessageProperties.throttleTokenProperties(resource)
-    channel.txSelect()
-    channel.basicAck(deliveryTag, false)
     channel.basicPublish("", resource.deferredQueueName, true, false, props, token.getBody)
-    channel.txCommit()
+    channel.basicAck(deliveryTag, false)
   }
 }
 
 
 final case class AcquiredResourceLeases(leases: Seq[ResourceLease]) {
 
-  def tryReleaseAll() : Try[Unit] = {
-    Try(releaseAll())
+  def releaseAllUnconsumed() : Unit = {
+    leases.map { lease => Try(lease.releaseUnconsumed()) }.find(_.isFailure).getOrElse(Nil)
   }
 
   def releaseAll() : Unit = {
-    leases.map { l => Try(l.release()) }.find(_.isFailure).foreach(_.get)
+    leases.map { l => Try(l.release()) }.find(_.isFailure).getOrElse(Nil)
   }
 }
 

@@ -1,7 +1,6 @@
 package com.harrys.hyppo.worker.data
 
 import java.io.File
-import java.util.UUID
 
 import com.amazonaws.services.s3.AmazonS3Client
 import com.harrys.hyppo.config.WorkerConfig
@@ -19,6 +18,14 @@ import scala.concurrent._
 final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val context: ExecutionContext) {
 
   private val client = new AmazonS3Client(config.awsCredentialsProvider)
+
+  def remoteLogLocation(input: WorkerInput) : RemoteLogFile = {
+    RemoteLogFile(config.dataBucketName, remoteLogKey(input))
+  }
+
+  def uploadLogFile(input: WorkerInput, logFile: File) : Future[RemoteLogFile] = {
+    uploadLogFile(remoteLogLocation(input), logFile)
+  }
 
   def uploadLogFile(location: RemoteLogFile, logFile: File) : Future[RemoteLogFile] = {
     if (!config.uploadTaskLog){
@@ -68,16 +75,6 @@ final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val 
     remote
   }
 
-  def createRemoteLogFile(input: WorkerInput, file: File) : RemoteLogFile = {
-    val specificKey = Seq(outputLogRoot(input), UUID.randomUUID().toString + ".out").mkString("/")
-    RemoteLogFile(config.dataBucketName, specificKey)
-  }
-
-  def newRemoteLogLocation(input: WorkerInput) : RemoteLogFile = {
-    val specificKey = Seq(outputLogRoot(input), UUID.randomUUID().toString + ".out").mkString("/")
-    RemoteLogFile(config.dataBucketName, specificKey)
-  }
-
   private def createRemoteRawDataFiles(task: DataIngestionTask, files: Seq[File]) : Seq[(RemoteRawDataFile, File)] = {
     val rawFileRoot = rawDataFileRoot(task)
     files.zipWithIndex.map(fileWithIndex => {
@@ -109,14 +106,14 @@ final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val 
     s"${config.storagePrefix}/${source.getName}/$date/job-${job.getId.toString}/records/task-${task.getTaskNumber}"
   }
 
-  private def outputLogRoot(input: WorkerInput) : String = {
+  private def remoteLogKey(input: WorkerInput) : String = {
     val date   = LocalDate.now(DateTimeZone.UTC).toString(LocalDateFormat)
     val prefix = s"${config.storagePrefix}/${input.source.getName}/$date"
     input match {
       case g: GeneralWorkerInput =>
-        s"$prefix/validate-${g.integration.version}/log"
+        s"$prefix/validate-${g.integration.version}/log/${ input.executionId.toString }.out"
       case i: IntegrationWorkerInput =>
-        s"$prefix/job-${i.job.getId.toString}/log"
+        s"$prefix/ingestion-job-${i.job.getId.toString}/log/${ input.executionId.toString }.out"
     }
   }
 }
