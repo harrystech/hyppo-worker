@@ -37,7 +37,6 @@ final class AMQPSerialization {
   }
 
   final class LookaheadObjectInputStream(onlyAllow: Class[_], inputStream: InputStream) extends ObjectInputStream(inputStream) {
-    @volatile
     private var firstCall: Boolean = true
 
     @throws[ClassNotFoundException]("if no associated class can be found")

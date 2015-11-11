@@ -72,7 +72,7 @@ final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging
         case None =>
           log.debug("Failed to identify any valid work items for worker")
         case Some(execution) =>
-          log.info(s"Successfully created task execution: ${ execution.input.executionId }")
+          log.debug(s"Successfully acquired task execution: ${ execution.input.summaryString }")
           worker ! execution
       }
     } catch {
@@ -95,7 +95,7 @@ final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging
             case Left(leases) =>
               Some(WorkQueueExecution(channel, item.headers, item.input, leases))
             case Right(ResourceUnavailable(unavailable)) =>
-              log.info(s"Unable to acquire ${ unavailable.inspect } to perform work. Sending back to queue.")
+              log.info(s"Unable to acquire ${ unavailable.inspect } to perform ${ item.input.summaryString }. Sending back to queue.")
               channel.basicReject(item.headers.deliveryTag, true)
               createExecutionItem(channel, worker, queues.tail)
           }

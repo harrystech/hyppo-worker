@@ -196,23 +196,21 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
       stopPollingForWork()
       context.stop(context.unwatch(jarLoadingActor))
       context.stop(context.unwatch(channelActor))
-      log.info("WorkerFSM stopped successfully")
+      log.info(s"WorkerFSM stopped successfully from state: ${ stateName }")
 
     case StopEvent(_, _, active: ActiveCommander) =>
       stopPollingForWork()
       context.stop(context.unwatch(jarLoadingActor))
       Option(active.taskActor).foreach(a => context.unwatch(a))
       Await.result(gracefulStop(active.commander, config.workerShutdownTimeout), config.workerShutdownTimeout)
-      context.unwatch(channelActor)
-      channelActor ! PoisonPill
       context.stop(context.unwatch(channelActor))
-      log.info("WorkerFSM stopped successfully")
+      log.info(s"WorkerFSM stopped successfully from state: ${ stateName }")
 
     case StopEvent(_, _, _) =>
       stopPollingForWork()
       context.stop(context.unwatch(jarLoadingActor))
       context.stop(context.unwatch(channelActor))
-      log.info("WorkerFSM stopped successfully")
+      log.info(s"WorkerFSM stopped successfully from state: ${ stateName }")
   }
 
   onTransition {

@@ -24,16 +24,16 @@ final class TaskFSM
 
   when(PreparingToStart){
     case Event(OperationStarting, _) =>
-      log.info("Commander began executing operation")
+      log.debug(s"Commander began running execution ${ execution.input.summaryString }")
       goto(PerformingOperation)
 
     case Event(Terminated(actor), _) if actor.equals(commander)  =>
-      log.warning("Commander exited before starting work. Requeueing operation")
+      log.warning(s"Commander exited before starting ${ execution.input.summaryString }. Requeueing operation.")
       releaseWorkForRetry()
       stop(FSM.Shutdown)
 
     case Event(ImpendingShutdown, _) =>
-      log.warning("Shutdown pending. Work will be sent back to queue")
+      log.warning(s"Shutdown pending. ${ execution.input.summaryString } be sent back to queue")
       execution.tryWithChannel { c =>
         c.basicReject(execution.headers.deliveryTag, true)
         execution.leases.releaseAll()
@@ -45,28 +45,28 @@ final class TaskFSM
   when(PerformingOperation){
     case Event(OperationResultAvailable(fail: FailureResponse), _) =>
       val summary = fail.exception.map(_.summary).getOrElse("<unknown failure>")
-      log.error(s"Operation failed. Sending response to results queue. Failure: ${ summary }")
+      log.error(s"${ execution.input.summaryString } failed. Sending response to results queue. Failure: ${ summary }")
       completeWithResponse(fail)
       goto(UploadingLogs)
 
     case Event(OperationResultAvailable(response), _) =>
-      log.info(s"${ execution.input.summaryString } produced results successfully")
+      log.debug(s"${ execution.input.summaryString } produced results successfully")
       completeWithResponse(response)
       goto(UploadingLogs)
 
     case Event(Terminated(actor), _) if actor.equals(commander) =>
-      log.error("Unexpected commander termination while operations were executing")
+      log.error(s"Unexpected commander termination while executing: ${ execution.input.summaryString }")
       Try(execution.leases.releaseAll())
-      stop(FSM.Failure("Commander actor died during execution"))
+      stop(FSM.Failure("Commander actor terminated unexpectedly."))
 
     case Event(ImpendingShutdown, _) =>
       context.unwatch(commander)
       if (execution.idempotent) {
-        log.warning("Shutdown in progress. Idempotent work is assumed safe and will be sent back to queue")
+        log.warning(s"Shutdown in progress. ${ execution.input.summaryString } is idempotent and will be sent back to queue")
         releaseWorkForRetry()
         stop(FSM.Shutdown)
       } else {
-        log.warning("Shutdown in progress. Unsafe work will be marked failed")
+        log.warning(s"Shutdown in progress. ${ execution.input.summaryString } is unsafe to re-execute and will be marked failed")
         stop(FSM.Shutdown)
       }
 
@@ -74,15 +74,15 @@ final class TaskFSM
 
   when(UploadingLogs) {
     case Event(OperationLogUploaded, _) =>
-      log.debug(s"Work log item successfully uploaded")
+      log.debug(s"Log upload for ${ execution.input.summaryString } completed successfully")
       taskFullyCompleted()
 
     case Event(Terminated(actor), _) if actor.equals(commander) =>
-      log.warning(s"Commander terminated during log uploads")
+      log.warning(s"Commander terminated while before logs could be uploaded for ${ execution.input.summaryString }")
       taskFullyCompleted()
 
     case Event(ImpendingShutdown, _) =>
-      log.warning(s"Shutdown pending. Work log uploading failed")
+      log.warning(s"Shutdown in progress interrupted log uploading for ${ execution.input.summaryString }")
       taskFullyCompleted()
   }
 
@@ -103,7 +103,7 @@ final class TaskFSM
 
   onTermination {
     case StopEvent(reason, _, _) =>
-      log.info(s"Stopped ${execution.input.summaryString} : ${ reason.toString }")
+      log.debug(s"Stopped ${execution.input.summaryString} : ${ reason.toString }")
   }
 
   private val serialization = new AMQPSerialization
@@ -145,13 +145,14 @@ final class TaskFSM
   }
 
   def sendAckForItem(channel: Channel): Unit = {
+    log.debug(s"Sending RabbitMQ ACK for ${ execution.input.summaryString }")
     channel.basicAck(execution.headers.deliveryTag, false)
   }
 
   def publishWorkResponse(channel: Channel, response: WorkerResponse) : Unit = {
     val body  = serialization.serialize(response)
     val props = AMQPMessageProperties.replyProperties(execution.headers)
-    log.debug(s"Publishing to queue ${ execution.headers.replyToQueue } : ${ response.toString }")
+    log.debug(s"Publishing response for ${ execution.input.summaryString } to queue ${ execution.headers.replyToQueue } : ${ response.toString }")
     channel.basicPublish("", execution.headers.replyToQueue, true, false, props, body)
   }
 }

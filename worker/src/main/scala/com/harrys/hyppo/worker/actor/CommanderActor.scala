@@ -16,11 +16,11 @@ import com.harrys.hyppo.worker.cache.LoadedJarFile
 import com.harrys.hyppo.worker.data.{DataHandler, TempFilePool}
 import com.harrys.hyppo.worker.proc.{CommandOutput, ExecutorException, SimpleCommander}
 
-import scala.collection.JavaConversions
 import scala.concurrent._
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.util.Success
+import scala.collection.JavaConversions
 
 /**
  * Created by jpetty on 10/29/15.
@@ -74,13 +74,13 @@ class CommanderActor
         throw new IllegalStateException(s"CommanderActor should never receive ${ WorkCompletedMessage.productPrefix } when not running work")
       }
       isRunningWork = false
-      log.info("CommanderActor became available")
+      log.debug(s"Commander ${ self.path.name } is now available")
 
     case input: WorkerInput =>
       if (isRunningWork){
         throw new IllegalStateException("Executor should never receive work while still running previous jobs!")
       }
-      log.info(s"Commander actor beginning work on ${ input.summaryString }")
+      log.debug(s"Commander ${ self.path.name } starting work on ${ input.summaryString }")
       isRunningWork  = true
       executeWorkRequest(sender(), input).onComplete {
         case _ => self ! WorkCompletedMessage
