@@ -16,11 +16,11 @@ import com.harrys.hyppo.worker.cache.LoadedJarFile
 import com.harrys.hyppo.worker.data.{DataHandler, TempFilePool}
 import com.harrys.hyppo.worker.proc.{CommandOutput, ExecutorException, SimpleCommander}
 
+import scala.collection.JavaConversions
 import scala.concurrent._
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.util.Success
-import scala.collection.JavaConversions
 
 /**
  * Created by jpetty on 10/29/15.

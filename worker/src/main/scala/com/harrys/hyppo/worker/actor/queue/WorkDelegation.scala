@@ -17,7 +17,7 @@ import scala.util.Random
   */
 final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging {
   //  Helper objects for dealing with queues
-  val serializer    = new AMQPSerialization
+  val serializer    = new AMQPSerialization(config.secretKey)
   val naming        = new QueueNaming(config)
   val helpers       = new QueueHelpers(config, naming)
   val resources     = new ResourceLeasing

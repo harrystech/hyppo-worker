@@ -17,14 +17,13 @@ import scala.concurrent.duration._
 object TestAmqp extends MockitoSugar {
 
   private var deliveryTagCounter: Long = 0
-  private val serializer = new AMQPSerialization
 
   private def nextDeliveryTag: Long = {
     deliveryTagCounter += 1
     deliveryTagCounter
   }
 
-  def fakeAmqpQueueItem(input: WorkerInput)(implicit system: ActorSystem) : GetResponse = {
+  def fakeAmqpQueueItem(serializer: AMQPSerialization, input: WorkerInput)(implicit system: ActorSystem) : GetResponse = {
     val get        = mock[GetResponse]
     val envelope   = mock[Envelope]
       when(envelope.getDeliveryTag).thenReturn(nextDeliveryTag)

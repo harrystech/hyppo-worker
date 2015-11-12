@@ -16,6 +16,7 @@ final class QueueItemHeaders(envelope: Envelope, properties: BasicProperties) {
 
   def correlationId: String       = properties.getCorrelationId
   def replyToQueue: String        = properties.getReplyTo
+  def messageId: String           = properties.getMessageId
   def enqueuedAt: LocalDateTime   = TimeUtils.toLocalDateTime(properties.getTimestamp)
   def timeToLive: Duration        = Duration.ofMillis(properties.getExpiration.toLong)
   def expiredAfter: LocalDateTime = enqueuedAt.plus(timeToLive)

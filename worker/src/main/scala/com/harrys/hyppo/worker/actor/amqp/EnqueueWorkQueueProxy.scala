@@ -13,7 +13,7 @@ import scala.util.Try
  */
 final class EnqueueWorkQueueProxy(config: CoordinatorConfig, connection: ActorRef) extends Actor with ActorLogging {
 
-  val serializer   = new AMQPSerialization
+  val serializer   = new AMQPSerialization(config.secretKey)
   val queueNaming  = new QueueNaming(config)
   val queueHelpers = new QueueHelpers(config, queueNaming)
 

@@ -1,8 +1,10 @@
 package com.harrys.hyppo.config
 
+import javax.crypto.spec.SecretKeySpec
+
 import com.amazonaws.auth.{AWSCredentialsProvider, BasicAWSCredentials, DefaultAWSCredentialsProviderChain}
 import com.amazonaws.internal.StaticCredentialsProvider
-import com.harrys.hyppo.worker.actor.amqp.{QueueNaming, RabbitHttpClient}
+import com.harrys.hyppo.worker.actor.amqp.{AMQPEncryption, QueueNaming, RabbitHttpClient}
 import com.rabbitmq.client.ConnectionFactory
 import com.typesafe.config.Config
 
@@ -43,7 +45,11 @@ abstract class HyppoConfig(config: Config) extends Serializable {
   //  Amount of time to allow queues to linger in an inactive state
   final val workQueueTTL: FiniteDuration = Duration(config.getDuration("hyppo.work-queue.queue-ttl").toMillis, MILLISECONDS)
 
+  //  Boolean flag that creates all queues as ephemeral, useful for testing in particular.
   final val allQueuesEphemeral: Boolean = config.getBoolean("hyppo.work-queue.all-ephemeral")
+
+  //  Secret key to use when encrypting / decrypting RabbitMQ payloads. Must match on the workers and coordinator
+  final val secretKey: SecretKeySpec = AMQPEncryption.initializeKeyFromSecret(config.getString("hyppo.secret-key"))
 
   //  The amount of time to allow for a graceful stop before forced termination
   final val shutdownTimeout: FiniteDuration = Duration(config.getDuration("hyppo.shutdown-timeout").toMillis, MILLISECONDS)

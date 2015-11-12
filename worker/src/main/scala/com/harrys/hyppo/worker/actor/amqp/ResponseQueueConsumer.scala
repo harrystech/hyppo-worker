@@ -16,7 +16,7 @@ import scala.concurrent.Await
  */
 final class ResponseQueueConsumer(config: CoordinatorConfig, connection: ActorRef, handler: WorkResponseHandler) extends Actor with ActorLogging {
   val queueHelpers        = new QueueHelpers(config)
-  val serializer          = new AMQPSerialization
+  val serializer          = new AMQPSerialization(config.secretKey)
   val consumerChannel     = connection.createChannel(ChannelActor.props(configureResponseQueueConsumer), name = Some("consumer-channel"))
 
   override def receive: Receive = {

@@ -1,6 +1,8 @@
 package com.harrys.hyppo.worker.actor.amqp
 
 import java.io._
+import java.util.zip.{GZIPInputStream, GZIPOutputStream}
+import javax.crypto.spec.SecretKeySpec
 
 import org.apache.commons.io.IOUtils
 
@@ -9,26 +11,27 @@ import scala.reflect._
 /**
  * Created by jpetty on 9/16/15.
  */
-final class AMQPSerialization {
+final class AMQPSerialization(secretKey: SecretKeySpec) {
 
   def serialize(o: AnyRef) : Array[Byte] = {
     val bytes  = new ByteArrayOutputStream(1024)
-    val stream = new ObjectOutputStream(bytes)
+    val stream = new ObjectOutputStream(new GZIPOutputStream(bytes))
     try {
       stream.writeObject(o)
     } finally {
       IOUtils.closeQuietly(stream)
     }
-    bytes.toByteArray
+    AMQPEncryption.encryptWithSecret(secretKey, bytes.toByteArray)
   }
 
   def deserialize[T : ClassTag](bytes: Array[Byte]) : T = {
-    val rtClass = classTag[T].runtimeClass.asInstanceOf[Class[T]]
+    val rtClass   = classTag[T].runtimeClass.asInstanceOf[Class[T]]
     deserialize(bytes, rtClass)
   }
 
   def deserialize[T](bytes: Array[Byte], klass: Class[T]) : T = {
-    val stream = new LookaheadObjectInputStream(klass, new ByteArrayInputStream(bytes))
+    val decrypted = AMQPEncryption.decryptWithSecret(secretKey, bytes)
+    val stream    = new LookaheadObjectInputStream(klass, new GZIPInputStream(new ByteArrayInputStream(decrypted)))
     try {
       stream.readObject().asInstanceOf[T]
     } finally {
