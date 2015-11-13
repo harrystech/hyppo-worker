@@ -15,12 +15,13 @@ import com.harrys.hyppo.worker.api.proto._
 import com.harrys.hyppo.worker.cache.LoadedJarFile
 import com.harrys.hyppo.worker.data.{DataHandler, TempFilePool}
 import com.harrys.hyppo.worker.proc.{CommandOutput, ExecutorException, SimpleCommander}
+import org.apache.commons.io.FileUtils
 
 import scala.collection.JavaConversions
-import scala.concurrent._
+import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.io.Source
-import scala.util.Success
+import scala.util.{Success, Try}
 
 /**
  * Created by jpetty on 10/29/15.
@@ -60,8 +61,9 @@ class CommanderActor
   }
 
   override def postStop() : Unit = {
-    simpleCommander.sendExitCommandAndWaitThenKill(Duration(1, SECONDS))
-    simpleCommander.executor.deleteFiles()
+    Try(simpleCommander.sendExitCommandAndWaitThenKill(Duration(1, SECONDS)))
+    Try(simpleCommander.executor.deleteFiles())
+    Try(jarFiles.foreach(f => FileUtils.deleteQuietly(f.file)))
   }
 
   private case object WorkCompletedMessage

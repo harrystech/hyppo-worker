@@ -19,12 +19,15 @@ import scala.concurrent.Await
 /**
  * Created by jpetty on 8/28/15.
  */
-final class HyppoCoordinator @Singleton() @Inject() (system: ActorSystem, config: CoordinatorConfig, handler: WorkResponseHandler) extends WorkDispatcher {
+@Singleton
+final class HyppoCoordinator @Inject() (system: ActorSystem, config: CoordinatorConfig, handler: WorkResponseHandler) extends WorkDispatcher {
   private val rabbitMQApi     = config.newRabbitMQApiClient()
   private val connectionActor = system.actorOf(ConnectionActor.props(config.rabbitMQConnectionFactory, reconnectionDelay = config.rabbitMQTimeout), name = "rabbitmq")
   HyppoCoordinator.initializeBaseQueues(config, system, connectionActor)
   private val responseActor   = system.actorOf(Props(classOf[ResponseQueueConsumer], config, connectionActor, handler), name = "responses")
   private val enqueueProxy    = system.actorOf(Props(classOf[EnqueueWorkQueueProxy], config, connectionActor), name = "enqueue-proxy")
+  //  Helpers for queue management
+  private val queueHelpers    = new QueueHelpers(config)
 
 
   system.registerOnTermination({
