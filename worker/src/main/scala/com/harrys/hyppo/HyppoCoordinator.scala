@@ -26,9 +26,6 @@ final class HyppoCoordinator @Inject() (system: ActorSystem, config: Coordinator
   HyppoCoordinator.initializeBaseQueues(config, system, connectionActor)
   private val responseActor   = system.actorOf(Props(classOf[ResponseQueueConsumer], config, connectionActor, handler), name = "responses")
   private val enqueueProxy    = system.actorOf(Props(classOf[EnqueueWorkQueueProxy], config, connectionActor), name = "enqueue-proxy")
-  //  Helpers for queue management
-  private val queueHelpers    = new QueueHelpers(config)
-
 
   system.registerOnTermination({
     Await.result(gracefulStop(responseActor, config.rabbitMQTimeout, Lifecycle.ImpendingShutdown), config.rabbitMQTimeout)
