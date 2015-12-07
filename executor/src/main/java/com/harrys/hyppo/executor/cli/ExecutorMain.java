@@ -7,8 +7,9 @@ public final class ExecutorMain {
 
     public static void main(String[] args){
         //  Option values
-        Integer commanderPort   = null;
-        String  integrationName = null;
+        Integer commanderPort    = null;
+        String  integrationName  = null;
+        LogStrategy  logStrategy = null;
 
         //  Parse the command line options
         try {
@@ -19,12 +20,13 @@ public final class ExecutorMain {
                 throw new IllegalArgumentException("Invalid port number value: " + portVal, nfe);
             }
             integrationName = System.getProperty("executor.integrationClass");
+            logStrategy     = LogStrategy.fromConfigName(System.getProperty("executor.logStrategy"));
         } catch (Exception e){
             System.err.println("Failed to parse executor options:\n" + e.getMessage());
             System.exit(1);
         }
 
-        final ExecutorCommandLoop looper = new ExecutorCommandLoop(commanderPort, integrationName);
+        final ExecutorCommandLoop looper = new ExecutorCommandLoop(commanderPort, integrationName, logStrategy);
 
         try {
             looper.runUntilExitCommand();

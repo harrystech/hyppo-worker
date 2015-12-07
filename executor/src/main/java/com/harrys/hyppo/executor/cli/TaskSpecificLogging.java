@@ -11,19 +11,19 @@ import java.nio.file.Path;
  */
 public final class TaskSpecificLogging {
 
-    private int taskCounter = 0;
+    private final LogStrategy logStrategy;
 
-    //  Initial log file does not exist
-    private File currentLogFile = null;
+    private int taskCounter = 0;
 
     private final Path logPath;
 
-    public TaskSpecificLogging(){
-        this.logPath = new File("").getAbsoluteFile().getParentFile().toPath().resolve("log");
-    }
-
-    public final File getCurrentLogFile(){
-        return this.currentLogFile;
+    public TaskSpecificLogging(final LogStrategy logStrategy){
+        this.logStrategy = logStrategy;
+        if (logStrategy == LogStrategy.File){
+            this.logPath  = new File("").getAbsoluteFile().getParentFile().toPath().resolve("log");
+        } else {
+            this.logPath  = null;
+        }
     }
 
     public final void flushLogStream(){
@@ -32,16 +32,18 @@ public final class TaskSpecificLogging {
 
     public final synchronized void rotateTaskLogFile() throws IOException {
         this.taskCounter++;
-        if (!this.logPath.toFile().isDirectory() && !this.logPath.toFile().mkdirs()){
-            throw new IllegalStateException("Couldn't create log directory: " + this.logPath.toAbsolutePath().toString());
+        if (this.logStrategy == LogStrategy.File && this.logPath != null){
+            if (!this.logPath.toFile().isDirectory() && !this.logPath.toFile().mkdirs()){
+                throw new IllegalStateException("Couldn't create log directory: " + this.logPath.toAbsolutePath().toString());
+            }
+            final File currentLogFile = logPath.resolve(String.format("task-%05d.out", taskCounter)).toFile();
+            if (!currentLogFile.createNewFile()){
+                throw new IllegalStateException("Failed to create new log output file: " + currentLogFile.getAbsolutePath());
+            }
+            System.out.println("Rotating to new log file: " + currentLogFile.getPath());
+            System.out.close();
+            System.setOut(new PrintStream(new FileOutputStream(currentLogFile)));
+            System.out.println("Started new task log file: " + currentLogFile.getPath());
         }
-        this.currentLogFile = logPath.resolve(String.format("task-%05d.out", taskCounter)).toFile();
-        if (!this.currentLogFile.createNewFile()){
-            throw new IllegalStateException("Failed to create new log output file: " + this.currentLogFile.getAbsolutePath());
-        }
-        System.out.println("Rotating to new log file: " + this.currentLogFile.getPath());
-        System.out.close();
-        System.setOut(new PrintStream(new FileOutputStream(this.currentLogFile)));
-        System.out.println("Started new task log file: " + currentLogFile.getPath());
     }
 }

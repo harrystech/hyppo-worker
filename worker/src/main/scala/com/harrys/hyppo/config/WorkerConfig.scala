@@ -1,6 +1,6 @@
 package com.harrys.hyppo.config
 
-import com.harrys.hyppo.worker.exec.ExecutorSetup
+import com.harrys.hyppo.worker.exec.{ExecutorSetup, TaskLogStrategy}
 import com.typesafe.config.Config
 
 import scala.collection.JavaConversions
@@ -33,7 +33,13 @@ final class WorkerConfig(config: Config) extends HyppoConfig(config) {
 
   val uploadDataTimeout: FiniteDuration = Duration(config.getDuration("hyppo.worker.upload-data-timeout").toMillis, MILLISECONDS)
 
-  val uploadTaskLog: Boolean = config.getBoolean("hyppo.worker.upload-task-log")
+  val taskLogStrategy: TaskLogStrategy = TaskLogStrategy.strategyForName(config.getString("hyppo.worker.task-log-strategy"))
+
+  val uploadTaskLog: Boolean = if (taskLogStrategy == TaskLogStrategy.FileTaskLogStrategy) {
+    config.getBoolean("hyppo.worker.upload-task-log")
+  } else {
+    false
+  }
 
   val uploadLogTimeout: FiniteDuration = Duration(config.getDuration("hyppo.worker.upload-log-timeout").toMillis, MILLISECONDS)
 

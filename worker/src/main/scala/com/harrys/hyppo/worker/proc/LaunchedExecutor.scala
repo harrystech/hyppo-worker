@@ -2,7 +2,8 @@ package com.harrys.hyppo.worker.proc
 
 import java.util.concurrent.Executors
 
-import com.harrys.hyppo.worker.exec.ExecutorFiles
+import com.harrys.hyppo.executor.cli.LogStrategy
+import com.harrys.hyppo.worker.exec.{TaskLogStrategy, ExecutorFiles}
 import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
 
@@ -14,7 +15,7 @@ import scala.util.{Failure, Success, Try}
 /**
  * Created by jpetty on 7/22/15.
  */
-final class LaunchedExecutor(val process: Process, val files: ExecutorFiles) {
+final class LaunchedExecutor(val process: Process, val files: ExecutorFiles, val logStrategy: TaskLogStrategy) {
   private val log = Logger(LoggerFactory.getLogger(this.getClass))
 
   //  Contains the result of the process exiting
@@ -34,13 +35,15 @@ final class LaunchedExecutor(val process: Process, val files: ExecutorFiles) {
       //  Unexpected exit condition
       case (code: Int) =>
         log.warn(s"Executor process exited with status code: $code")
-        Try(Source.fromFile(files.lastStdoutFile).mkString) match {
-          case Success(stdout) => log.error(s"Executor STDOUT:\n$stdout")
-          case _ => // NOOP
-        }
-        Try(Source.fromFile(files.standardErrorFile).mkString) match {
-          case Success(stderr) => log.error(s"Executor STDERR:\n$stderr")
-          case _ => // NOOP
+        if (logStrategy == TaskLogStrategy.FileTaskLogStrategy){
+          Try(Source.fromFile(files.lastStdoutFile).mkString) match {
+            case Success(stdout) => log.error(s"Executor STDOUT:\n$stdout")
+            case _ => // NOOP
+          }
+          Try(Source.fromFile(files.standardErrorFile).mkString) match {
+            case Success(stderr) => log.error(s"Executor STDERR:\n$stderr")
+            case _ => // NOOP
+          }
         }
     })
     exitFuture.onComplete({ _ =>

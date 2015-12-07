@@ -57,6 +57,6 @@ abstract class ExecutorCommandTest extends WordSpecLike with BeforeAndAfterAll w
   def createExecutorProcess(name: String) : LaunchedExecutor = {
     val setup = workerConfig.newExecutorSetup()
     setup.addToClasspath(testClasspath)
-    setup.launchWithArgs(serverSocket.getLocalPort, name)
+    setup.launchWithArgs(serverSocket.getLocalPort, name, workerConfig.taskLogStrategy)
   }
 }

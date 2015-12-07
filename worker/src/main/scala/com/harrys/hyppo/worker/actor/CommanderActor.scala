@@ -46,7 +46,7 @@ class CommanderActor
     //  Executor JAR file
     setup.addToClasspath(new File(classOf[ExecutorMain].getProtectionDomain.getCodeSource.getLocation.getFile))
     setup.addToClasspath(jarFiles.map(_.file))
-    val executor = setup.launchWithArgs(socket.getLocalPort, integration.integrationClass)
+    val executor = setup.launchWithArgs(socket.getLocalPort, integration.integrationClass, config.taskLogStrategy)
     new SimpleCommander(executor, socket)
   }
 
@@ -248,12 +248,18 @@ class CommanderActor
   }
 
   def createLogUploadFuture(taskActor: ActorRef, logLocation: RemoteLogFile, taskLog: File) : Future[Unit] = {
-    //  This always succeeds, even when it doesn't because it should never prevent forward progress
-    val uploadFuture = dataHandler.uploadLogFile(logLocation, taskLog).recover {
-      case e: Exception =>
-        log.error(e, s"Failed to upload log file: ${logLocation.toString}")
-        logLocation
-    }
+    val uploadFuture: Future[RemoteLogFile] =
+      if (config.uploadTaskLog){
+        //  This always succeeds, even when it doesn't because it should never prevent forward progress
+        dataHandler.uploadLogFile(logLocation, taskLog).recover {
+          case e: Exception =>
+            log.error(e, s"Failed to upload log file: ${logLocation.toString}")
+            logLocation
+        }
+      } else {
+        Future.successful[RemoteLogFile](logLocation)
+      }
+
     val timeout = akka.pattern.after(config.uploadLogTimeout, context.system.scheduler)(Future.successful(logLocation))
     //  Always signal the actor about the upload completion
     Future.firstCompletedOf(Seq(uploadFuture, timeout)).andThen {

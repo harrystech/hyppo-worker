@@ -31,10 +31,10 @@ public final class ExecutorCommandLoop {
     private DataIntegration<?> integration;
 
 
-    public ExecutorCommandLoop(final int serverPort, final String className){
+    public ExecutorCommandLoop(final int serverPort, final String className, final LogStrategy logStrategy){
         this.serverPort  = serverPort;
         this.className   = className;
-        this.logging     = new TaskSpecificLogging();
+        this.logging     = new TaskSpecificLogging(logStrategy);
         this.integration = null;
         this.mapper      = new ObjectMapper();
         this.mapper.getSerializationConfig().addMixInAnnotations(ExecutorInitMessage.class, ExecutorInitMessage.class);

@@ -1,10 +1,12 @@
 package com.harrys.hyppo.worker.exec
 
 import java.io.File
+import java.lang.ProcessBuilder.Redirect
 import java.nio.file.Files
 
 import com.harrys.hyppo.executor.cli.ExecutorMain
 import com.harrys.hyppo.worker.proc.LaunchedExecutor
+import org.apache.commons.lang3.SystemUtils
 
 import scala.collection.JavaConversions
 import scala.collection.mutable.ArrayBuffer
@@ -59,27 +61,40 @@ final class ExecutorSetup() {
     classpath.prependAll(entries)
   }
 
-  def launchWithArgs(commanderPort: Int, integrationClass: String) : LaunchedExecutor = {
+  def launchWithArgs(commanderPort: Int, integrationClass: String, logStrategy: TaskLogStrategy) : LaunchedExecutor = {
     val execFiles = new ExecutorFiles(Files.createTempDirectory("context"))
-    val builder   = new ProcessBuilder()
+    var builder   = new ProcessBuilder()
       .directory(execFiles.workingDirectory)
-      .redirectError(execFiles.standardErrorFile)
-      .redirectOutput(execFiles.initialStdOutFile)
-      .command(this.toCommand(commanderPort, integrationClass):_*)
+      .command(this.toCommand(commanderPort, integrationClass, logStrategy):_*)
+
+    builder = logStrategy match {
+      case TaskLogStrategy.PipeTaskLogStrategy =>
+        builder.inheritIO()
+      case TaskLogStrategy.FileTaskLogStrategy =>
+        builder
+          .redirectError(execFiles.standardErrorFile)
+          .redirectOutput(execFiles.initialStdOutFile)
+      case TaskLogStrategy.NullTaskLogStrategy =>
+        builder
+          .redirectOutput(systemNullFile())
+          .redirectError(systemNullFile())
+    }
+
     //  Last chance to inject system values before launch
     environment += ("JAVA_HOME" -> javaHome.getAbsolutePath)
     //  Set the environment
     builder.environment().putAll(JavaConversions.mapAsJavaMap(environment))
 
-    new LaunchedExecutor(builder.start(), execFiles)
+    new LaunchedExecutor(builder.start(), execFiles, logStrategy)
   }
 
-  def toCommand(commanderPort: Int, integrationClass: String) : Seq[String] = {
+  def toCommand(commanderPort: Int, integrationClass: String, logStrategy: TaskLogStrategy) : Seq[String] = {
     val classPathArg = classpath.map(_.getAbsolutePath).mkString(File.pathSeparator)
     val jvmCommand = Seq[String](this.javaBin.getAbsolutePath, "-cp", classPathArg) ++ jvmArgs
     val properties = Seq[String](
       "-Dexecutor.integrationClass=" + integrationClass,
-      "-Dexecutor.workerPort=" + commanderPort.toString
+      "-Dexecutor.workerPort=" + commanderPort.toString,
+      "-Dexecutor.logStrategy=" + logStrategy.configName
     )
     val appCommand = Seq[String](executorMainClass)
     jvmCommand ++ properties ++ appCommand
@@ -98,6 +113,14 @@ final class ExecutorSetup() {
   private def javaBin : File  = javaHome.toPath.resolve("bin").resolve("java").toFile
 
   private def executorMainClass: String = classOf[ExecutorMain].getCanonicalName
+
+  private def systemNullFile(): File = {
+    if (SystemUtils.IS_OS_WINDOWS){
+      new File("nul")
+    } else {
+      new File("/dev/null")
+    }
+  }
 
   private def checkClasspathArgs(entries: TraversableOnce[File]) : Unit = {
     val invalid = entries.filter(!_.exists())
