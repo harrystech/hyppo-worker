@@ -25,7 +25,13 @@ final class HyppoCoordinator @Inject() (system: ActorSystem, config: Coordinator
   private val connectionActor = system.actorOf(ConnectionActor.props(config.rabbitMQConnectionFactory, reconnectionDelay = config.rabbitMQTimeout), name = "rabbitmq")
   HyppoCoordinator.initializeBaseQueues(config, system, connectionActor)
   private val responseActor   = system.actorOf(Props(classOf[ResponseQueueConsumer], config, connectionActor, handler), name = "responses")
-  private val enqueueProxy    = system.actorOf(Props(classOf[EnqueueWorkQueueProxy], config, connectionActor), name = "enqueue-proxy")
+  private val enqueueProxy    = system.actorOf(Props(classOf[EnqueueWorkQueueProxy], config), name = "enqueue-proxy")
+
+  system.registerOnTermination(new Runnable {
+    override def run(): Unit = {
+      Await.result(gracefulStop(responseActor, config.rabbitMQTimeout, Lifecycle.ImpendingShutdown), config.rabbitMQTimeout)
+    }
+  })
 
   system.registerOnTermination({
     Await.result(gracefulStop(responseActor, config.rabbitMQTimeout, Lifecycle.ImpendingShutdown), config.rabbitMQTimeout)

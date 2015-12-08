@@ -1,7 +1,6 @@
 package com.harrys.hyppo.worker.exec
 
 import java.io.File
-import java.lang.ProcessBuilder.Redirect
 import java.nio.file.Files
 
 import com.harrys.hyppo.executor.cli.ExecutorMain

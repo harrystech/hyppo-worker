@@ -14,7 +14,7 @@ class QueueProxyActorTests extends RabbitMQTests("QueueProxyActorTests", TestCon
 
 
   "The Queue Proxy" must {
-    val proxy = TestActorRef(new EnqueueWorkQueueProxy(config, connectionActor))
+    val proxy = TestActorRef(new EnqueueWorkQueueProxy(config))
 
     "successfully enqueue messages" in {
       val source      =  TestObjects.testIngestionSource(name = "queue proxy")

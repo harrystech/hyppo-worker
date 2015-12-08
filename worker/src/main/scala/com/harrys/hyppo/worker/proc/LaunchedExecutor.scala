@@ -2,8 +2,7 @@ package com.harrys.hyppo.worker.proc
 
 import java.util.concurrent.Executors
 
-import com.harrys.hyppo.executor.cli.LogStrategy
-import com.harrys.hyppo.worker.exec.{TaskLogStrategy, ExecutorFiles}
+import com.harrys.hyppo.worker.exec.{ExecutorFiles, TaskLogStrategy}
 import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
 

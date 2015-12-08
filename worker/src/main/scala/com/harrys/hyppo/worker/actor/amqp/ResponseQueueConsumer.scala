@@ -1,6 +1,6 @@
 package com.harrys.hyppo.worker.actor.amqp
 
-import akka.actor.{Actor, ActorLogging, ActorRef}
+import akka.actor._
 import akka.pattern.gracefulStop
 import com.harrys.hyppo.Lifecycle.ImpendingShutdown
 import com.harrys.hyppo.config.CoordinatorConfig
@@ -17,16 +17,38 @@ import scala.concurrent.Await
 final class ResponseQueueConsumer(config: CoordinatorConfig, connection: ActorRef, handler: WorkResponseHandler) extends Actor with ActorLogging {
   val queueHelpers        = new QueueHelpers(config)
   val serializer          = new AMQPSerialization(config.secretKey)
-  val consumerChannel     = connection.createChannel(ChannelActor.props(configureResponseQueueConsumer), name = Some("consumer-channel"))
+
+  //  Fire-off a request to receive a new channel instance
+  connection ! CreateChannel(ChannelActor.props(configureResponseQueueConsumer), name = Some("consumer-channel"))
+
+  def connected(consumerChannel: ActorRef): Receive = {
+    case ChannelCreated(newChannel) =>
+      if (newChannel != consumerChannel){
+        log.debug("Unexpected new channel received. Using the new actor and terminating the old one")
+        consumerChannel ! PoisonPill
+        context.become(connected(newChannel), discardOld = true)
+      }
+
+    case ImpendingShutdown | PoisonPill =>
+      log.info("Shutting down consumer actor")
+      try {
+        Await.result(gracefulStop(consumerChannel, config.rabbitMQTimeout), config.rabbitMQTimeout)
+      } finally {
+        context.stop(self)
+      }
+  }
 
   override def receive: Receive = {
-    case ImpendingShutdown =>
-      log.info("Shutting down consumer")
-      Await.ready(gracefulStop(consumerChannel, config.rabbitMQTimeout), config.rabbitMQTimeout)
+    case ChannelCreated(channelActor) =>
+      log.debug("Successfully received channel actor for response consumer")
+      context.become(connected(channelActor), discardOld = true)
+
+    case ImpendingShutdown | PoisonPill =>
+      log.warning("Shutdown before consumer channel established")
       context.stop(self)
   }
 
-  def configureResponseQueueConsumer(channel: Channel, channelActor: ActorRef) : Unit = {
+  def configureResponseQueueConsumer(channel: Channel, channelActor: ActorRef): Unit = {
     channel.basicQos(1)
     val autoAck     = false
     val resultQueue = queueHelpers.createResultsQueue(channel).getQueue
