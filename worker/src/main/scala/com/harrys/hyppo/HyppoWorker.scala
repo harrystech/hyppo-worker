@@ -20,9 +20,11 @@ final class HyppoWorker(val system: ActorSystem, val settings: WorkerConfig) {
 
   def this(system: ActorSystem, config: Config) = this(system, new WorkerConfig(config))
 
-  val connection = system.actorOf(ConnectionActor.props(settings.rabbitMQConnectionFactory, reconnectionDelay = settings.rabbitMQTimeout), name = "rabbitmq")
   //  Kick off baseline queue creation
-  HyppoCoordinator.initializeBaseQueues(settings, system, connection)
+  HyppoCoordinator.initializeBaseQueues(settings)
+
+  val connection = system.actorOf(ConnectionActor.props(settings.rabbitMQConnectionFactory, reconnectionDelay = settings.rabbitMQTimeout), name = "rabbitmq")
+
   val delegation = system.actorOf(Props(classOf[WorkDelegation], settings), "delegation")
   val queueStats = system.actorOf(Props(classOf[RabbitQueueStatusActor], settings, delegation), "queue-stats")
   val workerFSMs = (1 to settings.workerCount).inclusive.map(i => {

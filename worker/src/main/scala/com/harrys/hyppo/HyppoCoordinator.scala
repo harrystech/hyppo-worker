@@ -4,7 +4,6 @@ import javax.inject.{Inject, Singleton}
 
 import akka.actor._
 import akka.pattern.gracefulStop
-import akka.util.Timeout
 import com.harrys.hyppo.config.{CoordinatorConfig, HyppoConfig}
 import com.harrys.hyppo.coordinator.{WorkDispatcher, WorkResponseHandler}
 import com.harrys.hyppo.util.ConfigUtils
@@ -22,8 +21,9 @@ import scala.concurrent.Await
 @Singleton
 final class HyppoCoordinator @Inject() (system: ActorSystem, config: CoordinatorConfig, handler: WorkResponseHandler) extends WorkDispatcher {
   private val rabbitMQApi     = config.newRabbitMQApiClient()
+  HyppoCoordinator.initializeBaseQueues(config)
+
   private val connectionActor = system.actorOf(ConnectionActor.props(config.rabbitMQConnectionFactory, reconnectionDelay = config.rabbitMQTimeout), name = "rabbitmq")
-  HyppoCoordinator.initializeBaseQueues(config, system, connectionActor)
   private val responseActor   = system.actorOf(Props(classOf[ResponseQueueConsumer], config, connectionActor, handler), name = "responses")
   private val enqueueProxy    = system.actorOf(Props(classOf[EnqueueWorkQueueProxy], config), name = "enqueue-proxy")
 
@@ -68,22 +68,17 @@ object HyppoCoordinator {
 
   def referenceConfig(): Config = ConfigUtils.resourceFileConfig("/com/harrys/hyppo/config/reference.conf")
 
-  def initializeBaseQueues(config: HyppoConfig, system: ActorSystem, connection: ActorRef) : Unit = {
-    import akka.pattern.ask
-    import system.dispatcher
-    implicit val timeout = Timeout(config.rabbitMQTimeout)
-    (connection ? CreateChannel(ChannelActor.props(), name = Some("init-channel"))).collect {
-      case ChannelCreated(channelActor) =>
-        channelActor ! ChannelMessage(channel => {
-          try {
-            val helpers = new QueueHelpers(config)
-            helpers.createExpiredQueue(channel)
-            helpers.createGeneralWorkQueue(channel)
-            helpers.createResultsQueue(channel)
-          } finally {
-            channelActor ! PoisonPill
-          }
-        }, dropIfNoChannel = false)
+  def initializeBaseQueues(config: HyppoConfig): Unit = {
+    val helpers    = new QueueHelpers(config)
+    val connection = config.rabbitMQConnectionFactory.newConnection()
+    try {
+      val channel  = connection.createChannel()
+      helpers.createExpiredQueue(channel)
+      helpers.createGeneralWorkQueue(channel)
+      helpers.createResultsQueue(channel)
+      channel.close()
+    } finally {
+      connection.close()
     }
   }
 }
