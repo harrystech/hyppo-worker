@@ -71,14 +71,17 @@ object HyppoCoordinator {
     import system.dispatcher
     implicit val timeout = Timeout(config.rabbitMQTimeout)
     (connection ? CreateChannel(ChannelActor.props(), name = Some("init-channel"))).collect {
-      case ChannelCreated(actor) =>
-        actor ! ChannelMessage(channel => {
-          val helpers = new QueueHelpers(config)
-          helpers.createExpiredQueue(channel)
-          helpers.createGeneralWorkQueue(channel)
-          helpers.createResultsQueue(channel)
+      case ChannelCreated(channelActor) =>
+        channelActor ! ChannelMessage(channel => {
+          try {
+            val helpers = new QueueHelpers(config)
+            helpers.createExpiredQueue(channel)
+            helpers.createGeneralWorkQueue(channel)
+            helpers.createResultsQueue(channel)
+          } finally {
+            channelActor ! PoisonPill
+          }
         }, dropIfNoChannel = false)
-        actor ! PoisonPill
     }
   }
 }
