@@ -33,10 +33,6 @@ final class HyppoCoordinator @Inject() (system: ActorSystem, config: Coordinator
     }
   })
 
-  system.registerOnTermination({
-    Await.result(gracefulStop(responseActor, config.rabbitMQTimeout, Lifecycle.ImpendingShutdown), config.rabbitMQTimeout)
-  })
-
   override def enqueue(work: WorkerInput) : Unit = {
     enqueueProxy ! work
   }
