@@ -5,7 +5,7 @@ import com.harrys.hyppo.Lifecycle.ImpendingShutdown
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.actor.amqp.{AMQPMessageProperties, AMQPSerialization}
 import com.harrys.hyppo.worker.actor.queue.WorkQueueExecution
-import com.harrys.hyppo.worker.actor.task.TaskFSMEvent.{OperationLogUploaded, OperationResultAvailable, OperationStarting}
+import com.harrys.hyppo.worker.actor.task.TaskFSMEvent.{OperationLogUploaded, OperationResponseAvailable, OperationStarting}
 import com.harrys.hyppo.worker.actor.task.TaskFSMStatus.{PerformingOperation, PreparingToStart, UploadingLogs}
 import com.harrys.hyppo.worker.api.proto.{FailureResponse, WorkerResponse}
 import com.thenewmotion.akka.rabbitmq.Channel
@@ -20,7 +20,7 @@ final class TaskFSM
   config:     WorkerConfig,
   execution:  WorkQueueExecution,
   commander:  ActorRef
-) extends LoggingFSM[TaskFSMStatus, Unit] {
+) extends FSM[TaskFSMStatus, Unit] with ActorLogging {
 
   when(PreparingToStart){
     case Event(OperationStarting, _) =>
@@ -43,13 +43,13 @@ final class TaskFSM
   }
 
   when(PerformingOperation){
-    case Event(OperationResultAvailable(fail: FailureResponse), _) =>
+    case Event(OperationResponseAvailable(fail: FailureResponse), _) =>
       val summary = fail.exception.map(_.summary).getOrElse("<unknown failure>")
       log.error(s"${ execution.input.summaryString } failed. Sending response to results queue. Failure: ${ summary }")
       completeWithResponse(fail)
       goto(UploadingLogs)
 
-    case Event(OperationResultAvailable(response), _) =>
+    case Event(OperationResponseAvailable(response), _) =>
       log.debug(s"${ execution.input.summaryString } produced results successfully")
       completeWithResponse(response)
       goto(UploadingLogs)
@@ -102,8 +102,8 @@ final class TaskFSM
   }
 
   onTermination {
-    case StopEvent(reason, _, _) =>
-      log.debug(s"Stopped ${execution.input.summaryString} : ${ reason.toString }")
+    case StopEvent(reason, state, _) =>
+      log.debug(s"Stopped ${execution.input.summaryString} :: ${ state } - ${ reason.toString }")
   }
 
   private val serialization = new AMQPSerialization(config.secretKey)

@@ -40,8 +40,8 @@ class TaskFSMTests extends RabbitMQTests("TaskFSMTests", TestConfig.workerWithRa
       }
 
       "transition and ACK when the results become available" in {
-        val fakeTasks = Seq(TestObjects.testIngestionTask(testJob))
-        taskFSM ! TaskFSMEvent.OperationResultAvailable(CreateIngestionTasksResponse(testInput, RemoteLogFile(config.dataBucketName, ""), fakeTasks))
+        val fakeTasks  = Seq(TestObjects.testIngestionTask(testJob))
+        taskFSM ! TaskFSMEvent.OperationResponseAvailable(CreateIngestionTasksResponse(testInput, None, fakeTasks))
         taskFSM.stateName should equal(UploadingLogs)
         eventually {
           helpers.checkQueueSize(connection, testExecution.headers.replyToQueue) shouldEqual 1
@@ -57,7 +57,8 @@ class TaskFSMTests extends RabbitMQTests("TaskFSMTests", TestConfig.workerWithRa
 
     "handling unsafe work" must {
       val testTask   = TestObjects.testIngestionTask(testJob)
-      val testInput  = PersistProcessedDataRequest(integration, UUID.randomUUID(), Seq(), testTask, RemoteProcessedDataFile(config.dataBucketName, "", 1))
+      val testRemote = RemoteStorageLocation(config.dataBucketName, "")
+      val testInput  = PersistProcessedDataRequest(integration, UUID.randomUUID(), Seq(), testTask, RemoteProcessedDataFile(testRemote, 0, Array[Byte](), 0))
       val channel    = connection.createChannel()
       val testItem   = enqueueThenDequeue(channel, testInput)
       val commander  = TestProbe()

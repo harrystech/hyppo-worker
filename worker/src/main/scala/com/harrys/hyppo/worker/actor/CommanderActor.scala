@@ -2,6 +2,7 @@ package com.harrys.hyppo.worker.actor
 
 import java.io.File
 import java.net.{InetAddress, ServerSocket}
+import java.util.concurrent.TimeoutException
 
 import akka.actor.{Actor, ActorLogging, ActorRef}
 import com.harrys.hyppo.config.WorkerConfig
@@ -12,15 +13,14 @@ import com.harrys.hyppo.source.api.model.{DataIngestionJob, TaskAssociations}
 import com.harrys.hyppo.worker.actor.task.TaskFSMEvent
 import com.harrys.hyppo.worker.api.code.{IntegrationCode, IntegrationSchema}
 import com.harrys.hyppo.worker.api.proto._
-import com.harrys.hyppo.worker.cache.LoadedJarFile
-import com.harrys.hyppo.worker.data.{DataHandler, TempFilePool}
+import com.harrys.hyppo.worker.data.{LoadedJarFile, DataHandler, TempFilePool}
 import com.harrys.hyppo.worker.proc.{CommandOutput, ExecutorException, SimpleCommander}
 
 import scala.collection.JavaConversions
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.io.Source
-import scala.util.{Success, Try}
+import scala.util.{Failure, Success, Try}
 
 /**
  * Created by jpetty on 10/29/15.
@@ -64,7 +64,8 @@ class CommanderActor
     Try(simpleCommander.executor.deleteFiles())
   }
 
-  private case object WorkCompletedMessage
+  private final case object WorkCompletedMessage
+
 
   private var isRunningWork = false
 
@@ -76,76 +77,83 @@ class CommanderActor
       isRunningWork = false
       log.debug(s"Commander ${ self.path.name } is now available")
 
+    case Failure(e) =>
+      log.error("Restarting commander due to previous failure")
+      throw e
+
     case input: WorkerInput =>
       if (isRunningWork){
         throw new IllegalStateException("Executor should never receive work while still running previous jobs!")
       }
       log.debug(s"Commander ${ self.path.name } starting work on ${ input.summaryString }")
       isRunningWork  = true
-      executeWorkRequest(sender(), input).onComplete {
-        case _ => self ! WorkCompletedMessage
+      val taskActor  = sender()
+      executeWorkRequest(taskActor, input).onComplete {
+        case Success(result) =>
+          log.debug(s"Successfully completed task ${ input.executionId } with result ${ result }")
+          self ! WorkCompletedMessage
+        case Failure(e) =>
+          log.error(e, s"Failed to process task ${ input.executionId }")
+          taskActor ! TaskFSMEvent.OperationResponseAvailable(FailureResponse(input, Some(dataHandler.remoteLogLocation(input)), Some(IntegrationException.fromThrowable(e))))
+          taskActor ! TaskFSMEvent.OperationLogUploaded
+          self ! Failure(e)
       }
   }
 
 
   def executeWorkRequest(taskActor: ActorRef, input: WorkerInput) : Future[Unit] = input match {
     case validate: ValidateIntegrationRequest =>
-      performIntegrationValidation(sender(), validate)
+      performIntegrationValidation(taskActor, validate)
 
     case create: CreateIngestionTasksRequest =>
-      performIngestionTaskCreation(sender(), create)
+      performIngestionTaskCreation(taskActor, create)
 
     case fetch: FetchProcessedDataRequest =>
-      performProcessedDataFetching(sender(), fetch)
+      performProcessedDataFetching(taskActor, fetch)
 
     case fetch: FetchRawDataRequest =>
-      performRawDataFetching(sender(), fetch)
+      performRawDataFetching(taskActor, fetch)
 
     case process: ProcessRawDataRequest =>
-      performRawDataProcessing(sender(), process)
+      performRawDataProcessing(taskActor, process)
 
     case persist: PersistProcessedDataRequest =>
-      performProcessedDataPersisting(sender(), persist)
+      performProcessedDataPersisting(taskActor, persist)
 
     case completed: HandleJobCompletedRequest =>
-      performJobCompletionHandling(sender(), completed)
+      performJobCompletionHandling(taskActor, completed)
   }
 
 
   def performIntegrationValidation(taskActor: ActorRef, input: ValidateIntegrationRequest) : Future[Unit] = {
-    val remoteLog  = dataHandler.remoteLogLocation(input)
-
     taskActor ! TaskFSMEvent.OperationStarting
 
-    val outputFuture = Future(simpleCommander.executeCommand(new ValidateIntegrationCommand(input.source)))
-    val responseSent = outputFuture.andThen {
-      //  Construct the response message and send it to the task actor
+    val outputFuture   = Future(simpleCommander.executeCommand(new ValidateIntegrationCommand(input.source)))
+    val responseSent   = outputFuture.andThen {
       case Success(CommandOutput(result: ValidateIntegrationResult, logFile)) =>
-        val errors = JavaConversions.asScalaBuffer(result.getValidationErrors).map(e => {
+        val errors  = JavaConversions.asScalaBuffer(result.getValidationErrors).map(e => {
           val trace = Option(e.getException).map(ExecutorException.createIntegrationException)
           ValidationErrorDetails(e.getMessage, trace)
         })
         val response = ValidateIntegrationResponse(
           input   = input,
-          logFile = remoteLog,
+          logFile = logFile.map { _ => dataHandler.remoteLogLocation(input) },
           isValid = result.isValid,
           schema  = IntegrationSchema(result.getSchema),
           rawDataIntegration  = result.isRawDataIntegration,
           persistingSemantics = result.getPersistingSemantics,
-          validationErrors = errors
+          validationErrors    = errors
         )
-        taskActor ! TaskFSMEvent.OperationResultAvailable(response)
+        taskActor ! TaskFSMEvent.OperationResponseAvailable(response)
     }
 
     responseSent.flatMap {
       case CommandOutput(_, logFile) =>
-        createLogUploadFuture(taskActor, remoteLog, logFile)
+        uploadLogFuture(taskActor, input, logFile)
     }
   }
 
   def performIngestionTaskCreation(taskActor: ActorRef, input: CreateIngestionTasksRequest) : Future[Unit] = {
-    val remoteLog  = dataHandler.remoteLogLocation(input)
-
     taskActor ! TaskFSMEvent.OperationStarting
 
     val outputFuture = Future(simpleCommander.executeCommand(new CreateIngestionTasksCommand(input.job)))
@@ -153,14 +161,14 @@ class CommanderActor
     outputFuture.flatMap {
       case CommandOutput(result: CreateIngestionTasksResult, logFile) =>
         val newTasks  = JavaConversions.asScalaBuffer(TaskAssociations.resetJobReferences(input.job, result.getCreatedTasks))
+        val remoteLog = logFile.map { _ => dataHandler.remoteLogLocation(input) }
         val response  = CreateIngestionTasksResponse(input, remoteLog, newTasks)
-        taskActor ! TaskFSMEvent.OperationResultAvailable(response)
-        createLogUploadFuture(taskActor, remoteLog, logFile)
+        taskActor ! TaskFSMEvent.OperationResponseAvailable(response)
+        uploadLogFuture(taskActor, input, logFile)
     }
   }
 
   def performProcessedDataFetching(taskActor: ActorRef, input: FetchProcessedDataRequest) : Future[Unit] = {
-    val remoteLog  = dataHandler.remoteLogLocation(input)
 
     taskActor ! TaskFSMEvent.OperationStarting
 
@@ -169,16 +177,15 @@ class CommanderActor
     outputFuture.flatMap {
       case CommandOutput(result: FetchProcessedDataResult, logFile) =>
         dataHandler.uploadProcessedData(result.getTask, result.getLocalDataFile, result.getRecordCount).map { remoteData =>
-          val response = FetchProcessedDataResponse(input, remoteLog, remoteData)
-          taskActor ! TaskFSMEvent.OperationResultAvailable(response)
-          createLogUploadFuture(taskActor, remoteLog, logFile)
+          val remoteLog = logFile.map { _ => dataHandler.remoteLogLocation(input) }
+          val response  = FetchProcessedDataResponse(input, remoteLog, remoteData)
+          taskActor ! TaskFSMEvent.OperationResponseAvailable(response)
+          uploadLogFuture(taskActor, input, logFile)
         }
     }
   }
 
   def performRawDataFetching(taskActor: ActorRef, input: FetchRawDataRequest) : Future[Unit] = {
-    val remoteLog  = dataHandler.remoteLogLocation(input)
-
     taskActor ! TaskFSMEvent.OperationStarting
 
     val outputFuture = Future(simpleCommander.executeCommand(new FetchRawDataCommand(input.task)))
@@ -186,54 +193,50 @@ class CommanderActor
     outputFuture.flatMap {
       case CommandOutput(result: FetchRawDataResult, logFile) =>
         dataHandler.uploadRawData(result.getTask, JavaConversions.asScalaBuffer(result.getRawDataFiles)).map { remoteData =>
-          val response = FetchRawDataResponse(input, remoteLog, remoteData)
-          taskActor ! TaskFSMEvent.OperationResultAvailable(response)
-          createLogUploadFuture(taskActor, remoteLog, logFile)
+          val remoteLog = logFile.map { _ => dataHandler.remoteLogLocation(input) }
+          val response  = FetchRawDataResponse(input, remoteLog, remoteData)
+          taskActor ! TaskFSMEvent.OperationResponseAvailable(response)
+          uploadLogFuture(taskActor, input, logFile)
         }
     }
   }
 
 
   def performRawDataProcessing(taskActor: ActorRef, input: ProcessRawDataRequest) : Future[Unit] = {
-    val remoteLog   = dataHandler.remoteLogLocation(input)
-    val filesFuture = Future.sequence(input.files.map(dataHandler.download)).andThen {
-      case Success(_) =>
-        taskActor ! TaskFSMEvent.OperationStarting
-    }
+    val filesFuture  = Future.sequence(input.files.map(dataHandler.download))
     val outputFuture = filesFuture.map { files =>
+      taskActor ! TaskFSMEvent.OperationStarting
       simpleCommander.executeCommand(new ProcessRawDataCommand(input.task, JavaConversions.seqAsJavaList(files)))
     }
 
     outputFuture.flatMap {
       case CommandOutput(result: ProcessRawDataResult, logFile) =>
         dataHandler.uploadProcessedData(result.getTask, result.getLocalDataFile, result.getRecordCount).map { remoteData =>
-          val response = ProcessRawDataResponse(input, remoteLog, remoteData)
-          taskActor ! TaskFSMEvent.OperationResultAvailable(response)
-          createLogUploadFuture(taskActor, remoteLog, logFile)
+          val remoteLog = logFile.map { _ => dataHandler.remoteLogLocation(input) }
+          val response  = ProcessRawDataResponse(input, remoteLog, remoteData)
+          taskActor ! TaskFSMEvent.OperationResponseAvailable(response)
+          uploadLogFuture(taskActor, input, logFile)
         }
     }
   }
 
   def performProcessedDataPersisting(taskActor: ActorRef, input: PersistProcessedDataRequest) : Future[Unit] = {
     val remoteLog  = dataHandler.remoteLogLocation(input)
-    val fileFuture = dataHandler.download(input.data).andThen {
-      case Success(_) =>
-        taskActor ! TaskFSMEvent.OperationStarting
-    }
+    val fileFuture = dataHandler.download(input.data)
     val outputFuture = fileFuture.map { data =>
+      taskActor ! TaskFSMEvent.OperationStarting
       simpleCommander.executeCommand(new PersistProcessedDataCommand(input.task, data))
     }
     outputFuture.flatMap {
       case CommandOutput(result: PersistProcessedDataResult, logFile) =>
-        val response = PersistProcessedDataResponse(input, remoteLog)
-        taskActor ! TaskFSMEvent.OperationResultAvailable(response)
-        createLogUploadFuture(taskActor, remoteLog, logFile)
+        val remoteLog = logFile.map { _ => dataHandler.remoteLogLocation(input) }
+        val response  = PersistProcessedDataResponse(input, remoteLog)
+        taskActor ! TaskFSMEvent.OperationResponseAvailable(response)
+        uploadLogFuture(taskActor, input, logFile)
     }
   }
 
   def performJobCompletionHandling(taskActor: ActorRef, input: HandleJobCompletedRequest) : Future[Unit] = {
-    val remoteLog  = dataHandler.remoteLogLocation(input)
-
     taskActor ! TaskFSMEvent.OperationStarting
 
     val command      = new HandleJobCompletedCommand(input.completedAt, input.job, JavaConversions.seqAsJavaList(input.tasks))
@@ -241,32 +244,35 @@ class CommanderActor
 
     outputFuture.flatMap {
       case CommandOutput(result: HandleJobCompletedResult, logFile) =>
-        val response = HandleJobCompletedResponse(input, remoteLog)
-        taskActor ! TaskFSMEvent.OperationResultAvailable(response)
-        createLogUploadFuture(taskActor, remoteLog, logFile)
+        val remoteLog = logFile.map { _ => dataHandler.remoteLogLocation(input) }
+        val response  = HandleJobCompletedResponse(input, remoteLog)
+        taskActor ! TaskFSMEvent.OperationResponseAvailable(response)
+        uploadLogFuture(taskActor, input, logFile)
     }
   }
 
-  def createLogUploadFuture(taskActor: ActorRef, logLocation: RemoteLogFile, taskLog: File) : Future[Unit] = {
-    val uploadFuture: Future[RemoteLogFile] =
-      if (config.uploadTaskLog){
-        //  This always succeeds, even when it doesn't because it should never prevent forward progress
-        dataHandler.uploadLogFile(logLocation, taskLog).recover {
-          case e: Exception =>
-            log.error(e, s"Failed to upload log file: ${logLocation.toString}")
-            logLocation
-        }
-      } else {
-        Future.successful[RemoteLogFile](logLocation)
-      }
-
-    val timeout = akka.pattern.after(config.uploadLogTimeout, context.system.scheduler)(Future.successful(logLocation))
-    //  Always signal the actor about the upload completion
-    Future.firstCompletedOf(Seq(uploadFuture, timeout)).andThen {
-      case _ =>
+  def uploadLogFuture(taskActor: ActorRef, task: WorkerInput, taskLog: Option[File]): Future[Unit] = {
+    if (!config.uploadTaskLog || taskLog.isEmpty){
+      Future[Unit]({
+        log.debug("Log uploads are disabled. Notifying task actor of completion")
         taskActor ! TaskFSMEvent.OperationLogUploaded
-        simpleCommander.executor.files.cleanupLogs()
-    }.map { _ => () } //  This converts the future into that Future[Unit]. Don't worry about it.
+      })
+    } else {
+      import akka.pattern.after
+      val logFile  = taskLog.get
+      val timeout  = after(config.uploadLogTimeout, context.system.scheduler)(Future.failed[RemoteLogFile](new TimeoutException("Maximum duration for log upload exceeded")))
+      val complete = dataHandler.uploadLogFile(task, logFile)
+      Future.firstCompletedOf(Seq(timeout, complete)).andThen {
+        case Success(uploaded) =>
+          log.debug(s"Successfully uploaded log for task ${ task.executionId } to s3://${uploaded.location.bucket}/${ uploaded.location.key.toString }")
+        case Failure(e) =>
+          log.error(e, s"Failed to upload log file for task ${ task.executionId }")
+      }.andThen {
+        case _ =>
+          taskActor ! TaskFSMEvent.OperationLogUploaded
+          simpleCommander.executor.files.cleanupLogs()
+      }.map { _ => () }
+    }
   }
 
   def assertIntegrationCodeMatchesJars() : Unit = {

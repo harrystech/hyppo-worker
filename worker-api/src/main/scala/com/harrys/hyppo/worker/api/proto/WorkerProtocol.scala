@@ -3,9 +3,9 @@ package com.harrys.hyppo.worker.api.proto
 import java.time.LocalDateTime
 import java.util.UUID
 
-import com.harrys.hyppo.source.api.{LogicalOperation, PersistingSemantics}
 import com.harrys.hyppo.source.api.model.{DataIngestionJob, DataIngestionTask, IngestionSource}
-import com.harrys.hyppo.worker.api.code.{ExecutableIntegration, IntegrationCode, IntegrationSchema, UnvalidatedIntegration}
+import com.harrys.hyppo.source.api.{LogicalOperation, PersistingSemantics}
+import com.harrys.hyppo.worker.api.code._
 
 /**
  * Created by jpetty on 9/18/15.
@@ -41,8 +41,8 @@ sealed trait GeneralWorkerInput extends WorkerInput {
 }
 
 sealed trait WorkerResponse extends Product with Serializable {
-  def input: WorkerInput
-  def logFile: RemoteLogFile
+  def input:   WorkerInput
+  def logFile: Option[RemoteStorageLocation]
   final def executionId: UUID = input.executionId
   final def logicalOperation: LogicalOperation = input.logicalOperation
 }
@@ -50,8 +50,8 @@ sealed trait WorkerResponse extends Product with Serializable {
 @SerialVersionUID(1L)
 final case class FailureResponse
 (
-  override val input: WorkerInput,
-  override val logFile: RemoteLogFile,
+  override val input:   WorkerInput,
+  override val logFile: Option[RemoteStorageLocation],
   exception: Option[IntegrationException]
 ) extends WorkerResponse
 
@@ -74,8 +74,8 @@ final case class ValidationErrorDetails(message: String, exception: Option[Integ
 @SerialVersionUID(1L)
 final case class ValidateIntegrationResponse
 (
-  override val input: ValidateIntegrationRequest,
-  override val logFile: RemoteLogFile,
+  override val input:   ValidateIntegrationRequest,
+  override val logFile: Option[RemoteStorageLocation],
   isValid: Boolean,
   schema: IntegrationSchema,
   rawDataIntegration: Boolean,
@@ -93,7 +93,7 @@ final case class CreateIngestionTasksRequest
 (
   override val integration: ExecutableIntegration,
   override val executionId: UUID,
-  override val resources: Seq[WorkResource],
+  override val resources:   Seq[WorkResource],
   job: DataIngestionJob
 ) extends IntegrationWorkerInput {
   override def logicalOperation: LogicalOperation = LogicalOperation.CreateIngestionTasks
@@ -102,8 +102,8 @@ final case class CreateIngestionTasksRequest
 @SerialVersionUID(1L)
 final case class CreateIngestionTasksResponse
 (
-  override val input: CreateIngestionTasksRequest,
-  override val logFile: RemoteLogFile,
+  override val input:   CreateIngestionTasksRequest,
+  override val logFile: Option[RemoteStorageLocation],
   tasks: Seq[DataIngestionTask]
 ) extends WorkerResponse {
 
@@ -119,7 +119,7 @@ final case class FetchProcessedDataRequest
 (
   override val integration: ExecutableIntegration,
   override val executionId: UUID,
-  override val resources: Seq[WorkResource],
+  override val resources:   Seq[WorkResource],
   task: DataIngestionTask
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
@@ -130,9 +130,9 @@ final case class FetchProcessedDataRequest
 @SerialVersionUID(1L)
 final case class FetchProcessedDataResponse
 (
-  override val input: FetchProcessedDataRequest,
-  override val logFile: RemoteLogFile,
-  data: RemoteProcessedDataFile
+  override val input:   FetchProcessedDataRequest,
+  override val logFile: Option[RemoteStorageLocation],
+  data:                 RemoteProcessedDataFile
 ) extends WorkerResponse {
 
   def task: DataIngestionTask = input.task
@@ -159,8 +159,8 @@ final case class FetchRawDataRequest
 @SerialVersionUID(1L)
 final case class FetchRawDataResponse
 (
-  override val input: FetchRawDataRequest,
-  override val logFile: RemoteLogFile,
+  override val input:   FetchRawDataRequest,
+  override val logFile: Option[RemoteStorageLocation],
   data: Seq[RemoteRawDataFile]
 ) extends WorkerResponse {
 
@@ -187,8 +187,8 @@ final case class ProcessRawDataRequest
 @SerialVersionUID(1L)
 final case class ProcessRawDataResponse
 (
-  override val input: ProcessRawDataRequest,
-  override val logFile: RemoteLogFile,
+  override val input:   ProcessRawDataRequest,
+  override val logFile: Option[RemoteStorageLocation],
   data: RemoteProcessedDataFile
 ) extends WorkerResponse {
 
@@ -221,7 +221,7 @@ final case class PersistProcessedDataRequest
 final case class PersistProcessedDataResponse
 (
   override val input:   PersistProcessedDataRequest,
-  override val logFile: RemoteLogFile
+  override val logFile: Option[RemoteStorageLocation]
 ) extends WorkerResponse
 
 
@@ -245,7 +245,7 @@ final case class HandleJobCompletedRequest
 @SerialVersionUID(1L)
 final case class HandleJobCompletedResponse
 (
-  override val input: HandleJobCompletedRequest,
-  override val logFile: RemoteLogFile
+  override val input:   HandleJobCompletedRequest,
+  override val logFile: Option[RemoteStorageLocation]
 ) extends WorkerResponse
 

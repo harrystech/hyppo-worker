@@ -1,10 +1,12 @@
 package com.harrys.hyppo.worker.proc
 
+import java.io.File
 import java.net.ServerSocket
 
 import com.harrys.hyppo.executor.net.WorkerIPCSocket
 import com.harrys.hyppo.executor.proto.com.ExitCommand
 import com.harrys.hyppo.executor.proto.{OperationResult, StartOperationCommand, StatusUpdate}
+import com.harrys.hyppo.worker.exec.TaskLogStrategy
 import com.typesafe.scalalogging.Logger
 import org.apache.commons.io.IOUtils
 import org.slf4j.LoggerFactory
@@ -29,12 +31,11 @@ final class SimpleCommander(val executor: LaunchedExecutor, server: ServerSocket
     val handler = new OperationHandler(this.waitForNextConnection())
     try {
       handler.sendCommand(command)
-      val result = consumeForResult(handler, update)
-      CommandOutput(result, executor.files.lastStdoutFile)
+      val result  = consumeForResult(handler, update)
+      CommandOutput(result, latestExecutorLogOption())
     } catch {
       case e: ExecutorException =>
-        val lastLogFile = executor.files.lastStdoutFile
-        throw new CommandExecutionException(command, e.toIntegrationException, lastLogFile)
+        throw new CommandExecutionException(command, e.toIntegrationException, latestExecutorLogOption())
     } finally {
       handler.close()
     }
@@ -86,6 +87,14 @@ final class SimpleCommander(val executor: LaunchedExecutor, server: ServerSocket
       executor.killProcess()
     } finally {
       IOUtils.closeQuietly(server)
+    }
+  }
+
+  private def latestExecutorLogOption(): Option[File] = {
+    if (executor.logStrategy == TaskLogStrategy.FileTaskLogStrategy){
+      Some(executor.files.lastStdoutFile)
+    } else {
+      None
     }
   }
 

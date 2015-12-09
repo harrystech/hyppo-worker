@@ -6,7 +6,7 @@ object HyppoWorker {
   final val ApiVersion    = "0.6.0"
 
   //  This is the version that all components will share when published
-  final val WorkerVersion = "0.6.0-SNAPSHOT"
+  final val WorkerVersion = "0.6.1-SNAPSHOT"
 
   lazy val universalSettings = Seq(
     organization := "com.harrys.hyppo",

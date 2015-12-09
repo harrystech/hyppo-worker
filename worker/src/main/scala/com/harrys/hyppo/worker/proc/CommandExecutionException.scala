@@ -8,6 +8,6 @@ import com.harrys.hyppo.worker.api.proto.IntegrationException
 /**
  * Created by jpetty on 10/27/15.
  */
-final class CommandExecutionException(val command: StartOperationCommand, val error: IntegrationException, val executorLog: File) extends Exception {
+final class CommandExecutionException(val command: StartOperationCommand, val error: IntegrationException, val executorLog: Option[File]) extends Exception {
 
 }

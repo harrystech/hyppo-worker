@@ -1,4 +1,4 @@
-package com.harrys.hyppo.worker.cache
+package com.harrys.hyppo.worker.data
 
 import java.io.File
 import java.nio.file.Files
@@ -8,7 +8,7 @@ import akka.pattern.pipe
 import com.amazonaws.services.s3.AmazonS3Client
 import com.amazonaws.services.s3.model.S3Object
 import com.harrys.hyppo.config.WorkerConfig
-import com.harrys.hyppo.worker.api.code.IntegrationJarFile
+import com.harrys.hyppo.worker.api.proto.RemoteStorageLocation
 import org.apache.commons.io.{FileCleaningTracker, FileUtils, FilenameUtils}
 
 import scala.concurrent.Future
@@ -31,18 +31,18 @@ final class JarLoadingActor(config: WorkerConfig) extends Actor with ActorLoggin
       loadJarFiles(jarFiles, sender())
   }
 
-  def loadJarFiles(jarFiles: Seq[IntegrationJarFile], recipient: ActorRef) : Unit = {
+  def loadJarFiles(jarFiles: Seq[RemoteStorageLocation], recipient: ActorRef) : Unit = {
     Future.sequence(
       jarFiles.map(jar => loadedJarFuture(jar))
     ).map(jars => JarsResult(jars)).pipeTo(recipient)
   }
 
 
-  private def loadedJarFuture(jar: IntegrationJarFile) : Future[LoadedJarFile] = Future {
+  private def loadedJarFuture(jar: RemoteStorageLocation) : Future[LoadedJarFile] = Future {
     log.debug(s"Loading Jar File From S3: ${jar.toString}")
-    val s3Object = client.getObject(jar.bucketName, jar.objectKey)
+    val s3Object = client.getObject(jar.bucket, jar.key)
     try {
-      val tempFile = downloadToFile(s3Object, Files.createTempFile(FilenameUtils.removeExtension(FilenameUtils.getBaseName(jar.objectKey)), "jar").toFile)
+      val tempFile = downloadToFile(s3Object, Files.createTempFile(FilenameUtils.removeExtension(FilenameUtils.getBaseName(jar.key)), "jar").toFile)
       //  We're now tying the lifecycle of this file to the specific key that made the request
       tracker.track(tempFile, jar)
       //  Since we return the result with the key attached, we can guarantee that the file lives as long as the cached value
@@ -66,6 +66,6 @@ final class JarLoadingActor(config: WorkerConfig) extends Actor with ActorLoggin
 }
 
 object JarLoadingActor {
-  case class LoadJars(jars: Seq[IntegrationJarFile])
+  case class LoadJars(jars: Seq[RemoteStorageLocation])
   case class JarsResult(jars: Seq[LoadedJarFile])
 }
