@@ -6,7 +6,7 @@ import com.harrys.hyppo.util.TimeUtils
 import com.harrys.hyppo.worker.api.proto._
 import com.thenewmotion.akka.rabbitmq._
 
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 /**
  * Created by jpetty on 9/16/15.
@@ -25,20 +25,36 @@ final class EnqueueWorkQueueProxy(config: CoordinatorConfig) extends Actor with 
     Try(localConnection.close())
   }
 
-  override def receive: Receive = {
-    case work: GeneralWorkerInput     =>
-      publishToQueue(queueNaming.generalQueueName, work)
+  private final case class RetryEnqueue(work: WorkerInput)
 
-    case work: IntegrationWorkerInput =>
-      val queue = queueHelpers.createIntegrationQueue(enqueueChannel, work).getQueue
-      publishToQueue(queue, work)
+  override def receive: Receive = {
+    case work: WorkerInput =>
+      Try(publishToQueue(work)) match {
+        case Success(_) => log.debug(s"Successfully enqueued work execution: ${ work.executionId }")
+        case Failure(e) =>
+          log.error(e, s"Failed to enqueue work execution: ${ work.executionId }. Retrying after actor restart")
+          self ! RetryEnqueue(work)
+          throw e
+      }
+
+    case RetryEnqueue(work) =>
+      Try(publishToQueue(work)) match {
+        case Success(_) => log.debug(s"Successfully enqueued work execution after retry: ${ work.executionId }")
+        case Failure(e) =>
+          log.error(e, s"Permanently failed to enqueue work execution: ${ work.executionId }")
+          throw e
+      }
   }
 
-  def publishToQueue(queue: String, work: WorkerInput): Unit = {
+  def publishToQueue(work: WorkerInput): Unit = {
+    val queueName = work match {
+      case generalWork: GeneralWorkerInput      => queueNaming.generalQueueName
+      case specificWork: IntegrationWorkerInput => queueHelpers.createIntegrationQueue(enqueueChannel, specificWork).getQueue
+    }
     createRequiredResources(work)
     val body  = serializer.serialize(work)
     val props = AMQPMessageProperties.enqueueProperties(work.executionId, queueNaming.resultsQueueName, TimeUtils.currentLocalDateTime(), TimeUtils.javaDuration(config.workTimeout))
-    enqueueChannel.basicPublish("", queue, true, false, props, body)
+    enqueueChannel.basicPublish("", queueName, true, false, props, body)
     enqueueChannel.waitForConfirms(config.rabbitMQTimeout.toMillis)
   }
 

@@ -6,10 +6,7 @@ import com.harrys.hyppo.executor.proto.com.ValidateIntegrationCommand;
 import com.harrys.hyppo.executor.proto.res.ValidateIntegrationResult;
 import com.harrys.hyppo.source.api.*;
 import com.harrys.hyppo.source.api.model.IngestionSource;
-import com.harrys.hyppo.source.api.task.ProcessedDataFetcher;
-import com.harrys.hyppo.source.api.task.ProcessedDataPersister;
-import com.harrys.hyppo.source.api.task.RawDataFetcher;
-import com.harrys.hyppo.source.api.task.RawDataProcessor;
+import com.harrys.hyppo.source.api.task.*;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
 import org.codehaus.jackson.map.ObjectMapper;
@@ -66,9 +63,11 @@ public final class ValidateIntegrationOperation extends ExecutorOperation<Valida
         //  Validate that a task creator can be successfully created
         try {
             if (integration.newIngestionTaskCreator() == null){
-                errors.add(new ValidationErrorDetail("Integration returned null TaskCreator instance", null));
+                errors.add(new ValidationErrorDetail("Integration returned null " + IngestionTaskCreator.class.getName() + " instance", null));
             }
         } catch (Exception e){
+            System.err.println("Failure in " + IngestionTaskCreator.class.getName() + " validation: ");
+            e.printStackTrace(System.err);
             errors.add(ValidationErrorDetail.forException("Failed to instantiate a TaskCreator", e));
         }
 
@@ -84,6 +83,8 @@ public final class ValidateIntegrationOperation extends ExecutorOperation<Valida
                 }
             }
         } catch (Exception e){
+            System.err.println("Failure in " + ProcessedDataPersister.class.getName() + " validation: ");
+            e.printStackTrace(System.err);
             errors.add(ValidationErrorDetail.forException("Integration failed to provide a valid " + ProcessedDataPersister.class.getName(), e));
         }
 
@@ -110,6 +111,8 @@ public final class ValidateIntegrationOperation extends ExecutorOperation<Valida
                 errors.add(new ValidationErrorDetail("Integration returned null " + ProcessedDataFetcher.class.getName(), null));
             }
         } catch (Exception e){
+            System.err.println("Failure in " + ProcessedDataFetcher.class.getName() + " validation:");
+            e.printStackTrace(System.err);
             errors.add(ValidationErrorDetail.forException("Integration failed to create new " + ProcessedDataFetcher.class.getName(), e));
         }
     }
@@ -125,6 +128,8 @@ public final class ValidateIntegrationOperation extends ExecutorOperation<Valida
                 errors.add(new ValidationErrorDetail("Integration returned null " + RawDataFetcher.class.getName(), null));
             }
         } catch (Exception e){
+            System.err.println("Failure in " + RawDataFetcher.class.getName() + " validation:");
+            e.printStackTrace(System.err);
             errors.add(ValidationErrorDetail.forException("Integration failed to create new " + RawDataFetcher.class.getName(), e));
         }
 
@@ -135,6 +140,8 @@ public final class ValidateIntegrationOperation extends ExecutorOperation<Valida
                 errors.add(new ValidationErrorDetail("Integration returned null " + RawDataProcessor.class.getName(), null));
             }
         } catch (Exception e){
+            System.err.println("Failure in " + RawDataProcessor.class.getName() + " validation:");
+            e.printStackTrace(System.err);
             errors.add(ValidationErrorDetail.forException("Integration failed to create new " + RawDataProcessor.class.getName(), e));
         }
     }

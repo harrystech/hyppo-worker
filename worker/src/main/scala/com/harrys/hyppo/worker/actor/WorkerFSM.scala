@@ -13,7 +13,7 @@ import com.harrys.hyppo.worker.api.proto.{GeneralWorkerInput, IntegrationWorkerI
 import com.harrys.hyppo.worker.data.{LoadedJarFile, JarLoadingActor}
 import com.rabbitmq.client.{ShutdownListener, ShutdownSignalException}
 import com.thenewmotion.akka.rabbitmq._
-import org.apache.commons.io.FileUtils
+import org.apache.commons.io.{FilenameUtils, FileUtils}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -65,7 +65,9 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
         log.debug(s"Code successfully loaded. Launching commander")
         goto(Running) using createCommanderActor(execution, jars)
       } else {
-        log.warning("Received unexpected code from jar loading actor. Deleting files and still waiting")
+        val expected = execution.input.code.jarFiles.map(j => FilenameUtils.getBaseName(j.key))
+        val jarNames = jars.map(j => FilenameUtils.getBaseName(j.key.key))
+        log.warning(s"Received unexpected jars: ${ jarNames.mkString(", ") }. Expecting: ${ expected.mkString(",") }. Deleting files continuing to wait")
         jars.foreach(j => FileUtils.deleteQuietly(j.file))
         stay()
       }
@@ -159,20 +161,21 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
         goto(Running) using ActiveCommander(commander, taskActor, Some(affinity))
       } else {
         log.debug(s"Restarting commander for fresh integration: ${ input.integration.sourceName }")
-        context.stop(commander)
+        context.stop(context.unwatch(active.commander))
         goto(LoadingCode) using WaitingForJars(item)
       }
 
     case Event(item @ WorkQueueExecution(_, _, input: GeneralWorkerInput, _), ActiveCommander(commander, _, _)) =>
       log.debug(s"Restarting commander for general work request: ${input.integration.sourceName}")
-      context.stop(commander)
+      context.stop(context.unwatch(commander))
       goto(LoadingCode) using WaitingForJars(item)
 
   }
 
   whenUnhandled {
     case Event(JarLoadingActor.JarsResult(jars), _) =>
-      log.warning(s"Received unexpected jar loading result. Deleting jars and staying in current state: $stateName")
+      val jarNames = jars.map(j => FilenameUtils.getBaseName(j.key.key))
+      log.warning(s"Received unexpected jar loading result: ${ jarNames.mkString(", ") }. Deleting jars and staying in current state: $stateName")
       jars.foreach(j => FileUtils.deleteQuietly(j.file))
       stay()
 
