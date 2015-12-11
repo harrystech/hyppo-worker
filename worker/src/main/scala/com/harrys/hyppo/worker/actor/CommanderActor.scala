@@ -254,7 +254,7 @@ class CommanderActor
   def wrapWithCommandExceptionHandler(taskActor: ActorRef, input: WorkerInput, future: Future[Unit]): Future[Unit] = {
     future.recoverWith {
       case e: CommandExecutionException =>
-        log.error(s"Failure executing task ${ input.executionId }. ${ e.error.summary }")
+        log.debug(s"Failure executing task ${ input.executionId }. ${ e.error.summary }")
         val remoteLog = e.executorLog.map(_ => dataHandler.remoteLogLocation(input))
         taskActor ! TaskFSMEvent.OperationResponseAvailable(FailureResponse(input, remoteLog, Some(e.error)))
         uploadLogFuture(taskActor, input, e.executorLog)

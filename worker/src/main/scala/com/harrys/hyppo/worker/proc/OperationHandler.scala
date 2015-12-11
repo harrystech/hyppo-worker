@@ -76,7 +76,7 @@ final class OperationHandler(client: WorkerIPCSocket) {
       case Failure(jsonError) =>
         Try(mapper.readValue(frame.getContent, classOf[ExecutorError])) match {
           case Success(execError) =>
-            log.warn(s"Executor replied with error - ${execError.getExceptionType}: ${execError.getMessage}")
+            log.debug(s"Executor replied with error - ${execError.getExceptionType}: ${execError.getMessage}")
             this.close()
             throw new ExecutorException(execError)
           case Failure(_) =>
