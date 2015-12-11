@@ -28,10 +28,16 @@ final class HyppoCoordinator @Inject() (system: ActorSystem, config: Coordinator
   private val enqueueProxy    = system.actorOf(Props(classOf[EnqueueWorkQueueProxy], config), name = "enqueue-proxy")
 
   system.registerOnTermination(new Runnable {
-    override def run(): Unit = {
-      Await.result(gracefulStop(responseActor, config.rabbitMQTimeout, Lifecycle.ImpendingShutdown), config.rabbitMQTimeout)
-    }
+    override def run(): Unit = stop()
   })
+
+  def start(): Unit = {
+    responseActor ! Lifecycle.ApplicationStarted
+  }
+
+  def stop(): Unit = {
+    Await.result(gracefulStop(responseActor, config.rabbitMQTimeout, Lifecycle.ImpendingShutdown), config.rabbitMQTimeout)
+  }
 
   override def enqueue(work: WorkerInput) : Unit = {
     enqueueProxy ! work

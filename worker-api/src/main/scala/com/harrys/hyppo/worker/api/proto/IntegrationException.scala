@@ -2,6 +2,10 @@ package com.harrys.hyppo.worker.api.proto
 
 import java.io.{PrintWriter, StringWriter}
 
+import org.apache.commons.lang3.StringUtils
+
+import scala.util.{Failure, Success, Try}
+
 /**
  * Created by jpetty on 10/27/15.
  */
@@ -24,7 +28,13 @@ final case class IntegrationException(exceptionClass: String, message: String, s
   /**
    * @return A summary of the exception, including the original class and the message, but no stack trace
    */
-  def summary: String = s"$exceptionClass: $message"
+  def summary: String = {
+    if (message == null || StringUtils.isBlank(message)){
+      exceptionClass
+    } else {
+      s"$exceptionClass: $message"
+    }
+  }
 
   /**
    * @return Creates a simple [[scala.Exception]] instance with the original exception class prefixed to the message. This

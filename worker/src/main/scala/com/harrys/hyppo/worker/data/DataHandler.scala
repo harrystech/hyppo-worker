@@ -1,10 +1,9 @@
 package com.harrys.hyppo.worker.data
 
 import java.io.File
-import java.util
 
 import com.amazonaws.services.s3.AmazonS3Client
-import com.amazonaws.services.s3.model.{S3Object, PutObjectResult}
+import com.amazonaws.services.s3.model.{PutObjectResult, S3Object}
 import com.amazonaws.util.Base64
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.source.api.model.DataIngestionTask
@@ -27,8 +26,11 @@ final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val 
     RemoteStorageLocation(config.dataBucketName, remoteLogKey(input))
   }
 
-  def uploadLogFile(input: WorkerInput, log: File): Future[RemoteLogFile] = Future {
-    val location = remoteLogLocation(input)
+  def uploadLogFile(input: WorkerInput, log: File): Future[RemoteLogFile] = {
+    uploadLogFile(remoteLogLocation(input), log)
+  }
+
+  def uploadLogFile(location: RemoteStorageLocation, log: File): Future[RemoteLogFile] = Future {
     val fileSize = FileUtils.sizeOf(log)
     val result   = client.putObject(location.bucket, location.key, log)
     RemoteLogFile(location, fileSize, fingerprintValue(result, log))

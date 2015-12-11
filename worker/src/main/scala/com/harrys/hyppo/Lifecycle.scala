@@ -5,5 +5,6 @@ package com.harrys.hyppo
  */
 object Lifecycle {
   case object ImpendingShutdown
+  case object ApplicationStarted
 
 }

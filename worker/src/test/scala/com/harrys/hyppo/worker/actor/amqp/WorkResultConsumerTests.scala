@@ -27,6 +27,10 @@ class WorkResultConsumerTests extends RabbitMQTests("WorkResultConsumerTests", T
   "The WorkResultConsumer" must {
     val consumer = TestActorRef(new ResponseQueueConsumer(config, connectionActor, handler), "consumer")
 
+    "handle the initialize message" in {
+      consumer ! Lifecycle.ApplicationStarted
+    }
+
     "create the expiration and results queue if they don't exist" in {
       eventually {
         helpers.passiveQueueDeclaration(connection, naming.expiredQueueName).map(_.getConsumerCount).getOrElse(0) shouldEqual 1

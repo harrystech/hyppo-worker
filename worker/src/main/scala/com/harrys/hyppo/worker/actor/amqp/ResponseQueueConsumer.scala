@@ -2,6 +2,7 @@ package com.harrys.hyppo.worker.actor.amqp
 
 import akka.actor._
 import akka.pattern.gracefulStop
+import com.harrys.hyppo.Lifecycle
 import com.harrys.hyppo.Lifecycle.ImpendingShutdown
 import com.harrys.hyppo.config.CoordinatorConfig
 import com.harrys.hyppo.coordinator.WorkResponseHandler
@@ -18,9 +19,6 @@ final class ResponseQueueConsumer(config: CoordinatorConfig, connection: ActorRe
   val queueHelpers        = new QueueHelpers(config)
   val serializer          = new AMQPSerialization(config.secretKey)
 
-  //  Fire-off a request to receive a new channel instance
-  connection ! CreateChannel(ChannelActor.props(configureResponseQueueConsumer), name = Some("consumer-channel"))
-
   def connected(consumerChannel: ActorRef): Receive = {
     case ChannelCreated(newChannel) =>
       if (newChannel != consumerChannel){
@@ -36,15 +34,31 @@ final class ResponseQueueConsumer(config: CoordinatorConfig, connection: ActorRe
       } finally {
         context.stop(self)
       }
+
+    case Lifecycle.ApplicationStarted =>
+      log.warning("Multiple ApplicationStarted events received. Ignoring request")
   }
 
-  override def receive: Receive = {
+  def waitingForChannel: Receive = {
     case ChannelCreated(channelActor) =>
       log.debug("Successfully received channel actor for response consumer")
       context.become(connected(channelActor), discardOld = true)
 
     case ImpendingShutdown | PoisonPill =>
       log.warning("Shutdown before consumer channel established")
+
+    case Lifecycle.ApplicationStarted =>
+      log.warning("Multiple ApplicationStarted events received. Ignoring request")
+  }
+
+  override def receive: Receive = {
+    case Lifecycle.ApplicationStarted =>
+      log.info("Starting response queue processing")
+      connection ! CreateChannel(ChannelActor.props(configureResponseQueueConsumer), name = Some("consumer-channel"))
+      context.become(waitingForChannel, discardOld = true)
+
+    case ImpendingShutdown | PoisonPill =>
+      log.debug("Stopped before application started successfully")
       context.stop(self)
   }
 

@@ -13,8 +13,8 @@ import com.harrys.hyppo.source.api.model.{DataIngestionJob, TaskAssociations}
 import com.harrys.hyppo.worker.actor.task.TaskFSMEvent
 import com.harrys.hyppo.worker.api.code.{IntegrationCode, IntegrationSchema}
 import com.harrys.hyppo.worker.api.proto._
-import com.harrys.hyppo.worker.data.{LoadedJarFile, DataHandler, TempFilePool}
-import com.harrys.hyppo.worker.proc.{CommandOutput, ExecutorException, SimpleCommander}
+import com.harrys.hyppo.worker.data.{DataHandler, LoadedJarFile, TempFilePool}
+import com.harrys.hyppo.worker.proc.{CommandExecutionException, CommandOutput, ExecutorException, SimpleCommander}
 
 import scala.collection.JavaConversions
 import scala.concurrent.Future
@@ -88,7 +88,7 @@ class CommanderActor
       log.debug(s"Commander ${ self.path.name } starting work on ${ input.summaryString }")
       isRunningWork  = true
       val taskActor  = sender()
-      executeWorkRequest(taskActor, input).onComplete {
+      wrapWithCommandExceptionHandler(taskActor, input, executeWorkRequest(taskActor, input)).onComplete {
         case Success(result) =>
           log.debug(s"Successfully completed task ${ input.executionId } with result ${ result }")
           self ! WorkCompletedMessage
@@ -248,6 +248,16 @@ class CommanderActor
         val response  = HandleJobCompletedResponse(input, remoteLog)
         taskActor ! TaskFSMEvent.OperationResponseAvailable(response)
         uploadLogFuture(taskActor, input, logFile)
+    }
+  }
+
+  def wrapWithCommandExceptionHandler(taskActor: ActorRef, input: WorkerInput, future: Future[Unit]): Future[Unit] = {
+    future.recoverWith {
+      case e: CommandExecutionException =>
+        log.error(s"Failure executing task ${ input.executionId }. ${ e.error.summary }")
+        val remoteLog = e.executorLog.map(_ => dataHandler.remoteLogLocation(input))
+        taskActor ! TaskFSMEvent.OperationResponseAvailable(FailureResponse(input, remoteLog, Some(e.error)))
+        uploadLogFuture(taskActor, input, e.executorLog)
     }
   }
 

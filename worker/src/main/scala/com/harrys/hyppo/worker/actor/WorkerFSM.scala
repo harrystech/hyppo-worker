@@ -10,10 +10,10 @@ import com.harrys.hyppo.worker.actor.queue.WorkQueueExecution
 import com.harrys.hyppo.worker.actor.task.TaskFSM
 import com.harrys.hyppo.worker.api.code.ExecutableIntegration
 import com.harrys.hyppo.worker.api.proto.{GeneralWorkerInput, IntegrationWorkerInput}
-import com.harrys.hyppo.worker.data.{LoadedJarFile, JarLoadingActor}
+import com.harrys.hyppo.worker.data.{JarLoadingActor, LoadedJarFile}
 import com.rabbitmq.client.{ShutdownListener, ShutdownSignalException}
 import com.thenewmotion.akka.rabbitmq._
-import org.apache.commons.io.{FilenameUtils, FileUtils}
+import org.apache.commons.io.{FileUtils, FilenameUtils}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
