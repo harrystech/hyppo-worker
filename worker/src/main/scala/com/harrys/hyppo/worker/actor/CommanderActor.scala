@@ -88,10 +88,13 @@ class CommanderActor
       log.debug(s"Commander ${ self.path.name } starting work on ${ input.summaryString }")
       isRunningWork  = true
       val taskActor  = sender()
-      wrapWithCommandExceptionHandler(taskActor, input, executeWorkRequest(taskActor, input)).onComplete {
+      executeWorkRequest(taskActor, input).onComplete {
         case Success(result) =>
           log.debug(s"Successfully completed task ${ input.executionId } with result ${ result }")
           self ! WorkCompletedMessage
+        case Failure(e: CommandExecutionException) =>
+          log.debug("Failure already handled at task actor level. Restarting commander")
+          self ! Failure(e)
         case Failure(e) =>
           log.error(e, s"Failed to process task ${ input.executionId }")
           taskActor ! TaskFSMEvent.OperationResponseAvailable(FailureResponse(input, Some(dataHandler.remoteLogLocation(input)), Some(IntegrationException.fromThrowable(e))))
@@ -128,7 +131,7 @@ class CommanderActor
   def performIntegrationValidation(taskActor: ActorRef, input: ValidateIntegrationRequest) : Future[Unit] = {
     taskActor ! TaskFSMEvent.OperationStarting
 
-    val outputFuture   = Future(simpleCommander.executeCommand(new ValidateIntegrationCommand(input.source)))
+    val outputFuture   = handleCommandException(taskActor, input, Future(simpleCommander.executeCommand(new ValidateIntegrationCommand(input.source))))
     val responseSent   = outputFuture.andThen {
       case Success(CommandOutput(result: ValidateIntegrationResult, logFile)) =>
         val errors  = JavaConversions.asScalaBuffer(result.getValidationErrors).map(e => {
@@ -156,7 +159,7 @@ class CommanderActor
   def performIngestionTaskCreation(taskActor: ActorRef, input: CreateIngestionTasksRequest) : Future[Unit] = {
     taskActor ! TaskFSMEvent.OperationStarting
 
-    val outputFuture = Future(simpleCommander.executeCommand(new CreateIngestionTasksCommand(input.job)))
+    val outputFuture = handleCommandException(taskActor, input, Future(simpleCommander.executeCommand(new CreateIngestionTasksCommand(input.job))))
 
     outputFuture.flatMap {
       case CommandOutput(result: CreateIngestionTasksResult, logFile) =>
@@ -172,7 +175,7 @@ class CommanderActor
 
     taskActor ! TaskFSMEvent.OperationStarting
 
-    val outputFuture  = Future(simpleCommander.executeCommand(new FetchProcessedDataCommand(input.task)))
+    val outputFuture  = handleCommandException(taskActor, input, Future(simpleCommander.executeCommand(new FetchProcessedDataCommand(input.task))))
 
     outputFuture.flatMap {
       case CommandOutput(result: FetchProcessedDataResult, logFile) =>
@@ -188,7 +191,7 @@ class CommanderActor
   def performRawDataFetching(taskActor: ActorRef, input: FetchRawDataRequest) : Future[Unit] = {
     taskActor ! TaskFSMEvent.OperationStarting
 
-    val outputFuture = Future(simpleCommander.executeCommand(new FetchRawDataCommand(input.task)))
+    val outputFuture = handleCommandException(taskActor, input, Future(simpleCommander.executeCommand(new FetchRawDataCommand(input.task))))
 
     outputFuture.flatMap {
       case CommandOutput(result: FetchRawDataResult, logFile) =>
@@ -209,7 +212,7 @@ class CommanderActor
       simpleCommander.executeCommand(new ProcessRawDataCommand(input.task, JavaConversions.seqAsJavaList(files)))
     }
 
-    outputFuture.flatMap {
+    handleCommandException(taskActor, input, outputFuture).flatMap {
       case CommandOutput(result: ProcessRawDataResult, logFile) =>
         dataHandler.uploadProcessedData(result.getTask, result.getLocalDataFile, result.getRecordCount).map { remoteData =>
           val remoteLog = logFile.map { _ => dataHandler.remoteLogLocation(input) }
@@ -227,7 +230,7 @@ class CommanderActor
       taskActor ! TaskFSMEvent.OperationStarting
       simpleCommander.executeCommand(new PersistProcessedDataCommand(input.task, data))
     }
-    outputFuture.flatMap {
+    handleCommandException(taskActor, input, outputFuture).flatMap {
       case CommandOutput(result: PersistProcessedDataResult, logFile) =>
         val remoteLog = logFile.map { _ => dataHandler.remoteLogLocation(input) }
         val response  = PersistProcessedDataResponse(input, remoteLog)
@@ -240,7 +243,7 @@ class CommanderActor
     taskActor ! TaskFSMEvent.OperationStarting
 
     val command      = new HandleJobCompletedCommand(input.completedAt, input.job, JavaConversions.seqAsJavaList(input.tasks))
-    val outputFuture = Future(simpleCommander.executeCommand(command))
+    val outputFuture = handleCommandException(taskActor, input, Future(simpleCommander.executeCommand(command)))
 
     outputFuture.flatMap {
       case CommandOutput(result: HandleJobCompletedResult, logFile) =>
@@ -251,13 +254,15 @@ class CommanderActor
     }
   }
 
-  def wrapWithCommandExceptionHandler(taskActor: ActorRef, input: WorkerInput, future: Future[Unit]): Future[Unit] = {
-    future.recoverWith {
-      case e: CommandExecutionException =>
+  def handleCommandException(taskActor: ActorRef, input: WorkerInput, future: Future[CommandOutput]): Future[CommandOutput] = {
+    future.andThen {
+      case Failure(e: CommandExecutionException) =>
         log.debug(s"Failure executing task ${ input.executionId }. ${ e.error.summary }")
         val remoteLog = e.executorLog.map(_ => dataHandler.remoteLogLocation(input))
         taskActor ! TaskFSMEvent.OperationResponseAvailable(FailureResponse(input, remoteLog, Some(e.error)))
-        uploadLogFuture(taskActor, input, e.executorLog)
+        uploadLogFuture(taskActor, input, e.executorLog).andThen {
+          case _ => self ! Failure(e)
+        }
     }
   }
 

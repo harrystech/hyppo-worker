@@ -43,6 +43,10 @@ final class TaskFSM
   }
 
   when(PerformingOperation){
+    case Event(OperationStarting, _) =>
+      log.warning(s"Received unexpected duplicate ${ OperationStarting.productPrefix } message")
+      stay()
+
     case Event(OperationResponseAvailable(fail: FailureResponse), _) =>
       val summary = fail.exception.map(_.summary).getOrElse("<unknown failure>")
       log.error(s"${ execution.input.summaryString } failed. Sending response to results queue. Failure: ${ summary }")
