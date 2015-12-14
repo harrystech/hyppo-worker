@@ -12,6 +12,7 @@ import com.harrys.hyppo.source.api.model.DataIngestionTask;
 import com.harrys.hyppo.source.api.model.IngestionSource;
 import com.harrys.hyppo.source.api.task.ProcessRawData;
 import com.harrys.hyppo.source.api.task.RawDataProcessor;
+import org.apache.avro.file.CodecFactory;
 import org.apache.avro.specific.SpecificRecord;
 import org.codehaus.jackson.map.ObjectMapper;
 
@@ -62,7 +63,7 @@ public final class ProcessRawDataOperation extends ExecutorOperation<ProcessRawD
         final File localResults = Files.createTempFile(prefix, "avro").toFile();
 
         final RawDataProcessor<? extends SpecificRecord> processor  = integration.newRawDataProcessor();
-        final AvroRecordAppender<? extends SpecificRecord> appender = integration.avroType().createAvroRecordAppender(localResults);
+        final AvroRecordAppender<? extends SpecificRecord> appender = integration.avroType().createAvroRecordAppender(localResults, CodecFactory.snappyCodec());
 
         for (final File inputFile : this.getLocalRawFiles()){
             //  TODO: Track progress through success / failure
