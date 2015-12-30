@@ -14,7 +14,6 @@ import org.codehaus.jackson.map.annotate.JsonSerialize;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Created by jpetty on 11/9/15.

@@ -224,7 +224,6 @@ class CommanderActor
   }
 
   def performProcessedDataPersisting(taskActor: ActorRef, input: PersistProcessedDataRequest) : Future[Unit] = {
-    val remoteLog  = dataHandler.remoteLogLocation(input)
     val fileFuture = dataHandler.download(input.data)
     val outputFuture = fileFuture.map { data =>
       taskActor ! TaskFSMEvent.OperationStarting
