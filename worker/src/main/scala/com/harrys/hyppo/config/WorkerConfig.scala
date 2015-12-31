@@ -1,6 +1,6 @@
 package com.harrys.hyppo.config
 
-import com.harrys.hyppo.worker.exec.{ExecutorSetup, TaskLogStrategy}
+import com.harrys.hyppo.worker.exec.{AvroFileCodec, ExecutorSetup, TaskLogStrategy}
 import com.typesafe.config.Config
 
 import scala.collection.JavaConversions
@@ -18,6 +18,8 @@ final class WorkerConfig(config: Config) extends HyppoConfig(config) {
     setup.addJvmArgs(JavaConversions.asScalaBuffer(config.getStringList("hyppo.executor.jvm-opts")))
     setup
   }
+
+  val avroFileCodec: AvroFileCodec = new AvroFileCodec(config.getString("hyppo.worker.avro-file-codec"))
 
   val workerCount: Int = config.getInt("hyppo.worker-count")
 
@@ -42,6 +44,8 @@ final class WorkerConfig(config: Config) extends HyppoConfig(config) {
   }
 
   val uploadLogTimeout: FiniteDuration = Duration(config.getDuration("hyppo.worker.upload-log-timeout").toMillis, MILLISECONDS)
+
+
 
   def newExecutorSetup(): ExecutorSetup = defaultSetup.clone()
 

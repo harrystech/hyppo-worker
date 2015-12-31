@@ -11,6 +11,7 @@ import com.harrys.hyppo.executor.proto.init.InitializationFailed;
 import com.harrys.hyppo.source.api.DataIntegration;
 import com.harrys.hyppo.source.api.ProcessedDataIntegration;
 import com.harrys.hyppo.source.api.RawDataIntegration;
+import org.apache.avro.file.CodecFactory;
 import org.codehaus.jackson.map.ObjectMapper;
 
 import java.io.IOException;
@@ -30,11 +31,14 @@ public final class ExecutorCommandLoop {
 
     private DataIntegration<?> integration;
 
+    private final CodecFactory avroCodec;
 
-    public ExecutorCommandLoop(final int serverPort, final String className, final LogStrategy logStrategy){
+
+    public ExecutorCommandLoop(final int serverPort, final String className, final LogStrategy logStrategy, final CodecFactory avroCodec){
         this.serverPort  = serverPort;
         this.className   = className;
         this.logging     = new TaskSpecificLogging(logStrategy);
+        this.avroCodec   = avroCodec;
         this.integration = null;
         this.mapper      = new ObjectMapper();
         this.mapper.getSerializationConfig().addMixInAnnotations(ExecutorInitMessage.class, ExecutorInitMessage.class);
@@ -54,7 +58,7 @@ public final class ExecutorCommandLoop {
                 } else {
                     try {
                         this.initializeIntegration();
-                        final CommanderSocketHandler handler = new CommanderSocketHandler(mapper, socket, this.integration);
+                        final CommanderSocketHandler handler = new CommanderSocketHandler(mapper, socket, this.integration, avroCodec);
                         handler.handleCommand(command);
                     } catch (Exception e){
                         this.logging.flushLogStream();

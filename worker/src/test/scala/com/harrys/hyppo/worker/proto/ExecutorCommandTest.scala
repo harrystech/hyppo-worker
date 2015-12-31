@@ -6,6 +6,7 @@ import java.net.{InetAddress, ServerSocket}
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.source.api.DataIntegration
 import com.harrys.hyppo.worker.TestConfig
+import com.harrys.hyppo.worker.exec.AvroFileCodec
 import com.harrys.hyppo.worker.proc.{LaunchedExecutor, SimpleCommander}
 import org.scalatest._
 import org.scalatest.concurrent.TimeLimitedTests
@@ -57,6 +58,6 @@ abstract class ExecutorCommandTest extends WordSpecLike with BeforeAndAfterAll w
   def createExecutorProcess(name: String) : LaunchedExecutor = {
     val setup = workerConfig.newExecutorSetup()
     setup.addToClasspath(testClasspath)
-    setup.launchWithArgs(serverSocket.getLocalPort, name, workerConfig.taskLogStrategy)
+    setup.launchWithArgs(serverSocket.getLocalPort, name, workerConfig.taskLogStrategy, new AvroFileCodec("deflate"))
   }
 }

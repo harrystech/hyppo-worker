@@ -4,6 +4,7 @@ import com.harrys.hyppo.executor.proto.StartOperationCommand;
 import com.harrys.hyppo.executor.proto.com.*;
 import com.harrys.hyppo.executor.run.*;
 import com.harrys.hyppo.source.api.DataIntegration;
+import org.apache.avro.file.CodecFactory;
 import org.codehaus.jackson.map.ObjectMapper;
 
 
@@ -18,10 +19,13 @@ public final class CommanderSocketHandler {
 
     private final ObjectMapper mapper;
 
-    public CommanderSocketHandler(final ObjectMapper mapper, final WorkerIPCSocket socket, final DataIntegration<?> integration){
+    private final CodecFactory avroCodec;
+
+    public CommanderSocketHandler(final ObjectMapper mapper, final WorkerIPCSocket socket, final DataIntegration<?> integration, final CodecFactory avroCodec){
         this.socket      = socket;
         this.integration = integration;
         this.mapper      = mapper;
+        this.avroCodec   = avroCodec;
     }
 
     public final void handleCommand(final StartOperationCommand command) throws Exception {
@@ -57,7 +61,7 @@ public final class CommanderSocketHandler {
     }
 
     private final void handleFetchProcessedData(final FetchProcessedDataCommand command) throws Exception {;
-        new FetchProcessedDataOperation(command, mapper, integration, socket).execute();
+        new FetchProcessedDataOperation(command, mapper, integration, socket, avroCodec).execute();
     }
 
     private final void handleFetchRawData(final FetchRawDataCommand command) throws Exception {
@@ -70,7 +74,7 @@ public final class CommanderSocketHandler {
     }
 
     private final void handleProcessRawData(final ProcessRawDataCommand command) throws Exception {
-        new ProcessRawDataOperation(command, mapper, integration, socket).execute();
+        new ProcessRawDataOperation(command, mapper, integration, socket, avroCodec).execute();
     }
 
     private final void handleValidateIntegration(final ValidateIntegrationCommand command) throws Exception {

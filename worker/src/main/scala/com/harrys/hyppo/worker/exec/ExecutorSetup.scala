@@ -60,11 +60,11 @@ final class ExecutorSetup() {
     classpath.prependAll(entries)
   }
 
-  def launchWithArgs(commanderPort: Int, integrationClass: String, logStrategy: TaskLogStrategy) : LaunchedExecutor = {
+  def launchWithArgs(commanderPort: Int, integrationClass: String, logStrategy: TaskLogStrategy, avroCodec: AvroFileCodec) : LaunchedExecutor = {
     val execFiles = new ExecutorFiles(Files.createTempDirectory("context"))
     var builder   = new ProcessBuilder()
       .directory(execFiles.workingDirectory)
-      .command(this.toCommand(commanderPort, integrationClass, logStrategy):_*)
+      .command(this.toCommand(commanderPort, integrationClass, logStrategy, avroCodec):_*)
 
     builder = logStrategy match {
       case TaskLogStrategy.PipeTaskLogStrategy =>
@@ -87,13 +87,14 @@ final class ExecutorSetup() {
     new LaunchedExecutor(builder.start(), execFiles, logStrategy)
   }
 
-  def toCommand(commanderPort: Int, integrationClass: String, logStrategy: TaskLogStrategy) : Seq[String] = {
+  def toCommand(commanderPort: Int, integrationClass: String, logStrategy: TaskLogStrategy, avroCodec: AvroFileCodec) : Seq[String] = {
     val classPathArg = classpath.map(_.getAbsolutePath).mkString(File.pathSeparator)
     val jvmCommand = Seq[String](this.javaBin.getAbsolutePath, "-cp", classPathArg) ++ jvmArgs
     val properties = Seq[String](
       "-Dexecutor.integrationClass=" + integrationClass,
       "-Dexecutor.workerPort=" + commanderPort.toString,
-      "-Dexecutor.logStrategy=" + logStrategy.configName
+      "-Dexecutor.logStrategy=" + logStrategy.configName,
+      "-Dexecutor.avroFileCodec=" + avroCodec.name
     )
     val appCommand = Seq[String](executorMainClass)
     jvmCommand ++ properties ++ appCommand

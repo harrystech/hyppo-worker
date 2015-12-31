@@ -1,6 +1,5 @@
 package com.harrys.hyppo.executor.run;
 
-import com.harrys.hyppo.executor.cli.CodecFactoryProvider;
 import com.harrys.hyppo.executor.net.WorkerIPCSocket;
 import com.harrys.hyppo.executor.proto.com.FetchProcessedDataCommand;
 import com.harrys.hyppo.executor.proto.res.FetchProcessedDataResult;
@@ -13,6 +12,7 @@ import com.harrys.hyppo.source.api.model.DataIngestionTask;
 import com.harrys.hyppo.source.api.model.IngestionSource;
 import com.harrys.hyppo.source.api.task.FetchProcessedData;
 import com.harrys.hyppo.source.api.task.ProcessedDataFetcher;
+import org.apache.avro.file.CodecFactory;
 import org.apache.avro.specific.SpecificRecord;
 import org.codehaus.jackson.map.ObjectMapper;
 
@@ -24,8 +24,17 @@ import java.nio.file.Files;
  */
 public final class FetchProcessedDataOperation extends ExecutorOperation<FetchProcessedDataCommand, FetchProcessedDataResult> {
 
-    public FetchProcessedDataOperation(final FetchProcessedDataCommand command, final ObjectMapper mapper, final DataIntegration<?> integration, final WorkerIPCSocket socket){
+    private final CodecFactory avroCodec;
+
+    public FetchProcessedDataOperation(
+            final FetchProcessedDataCommand command,
+            final ObjectMapper mapper,
+            final DataIntegration<?> integration,
+            final WorkerIPCSocket socket,
+            final CodecFactory avroCodec
+    ){
         super(command, mapper, integration, socket);
+        this.avroCodec = avroCodec;
     }
 
     public final DataIngestionTask getTask(){
@@ -59,7 +68,7 @@ public final class FetchProcessedDataOperation extends ExecutorOperation<FetchPr
         }
 
         final File outputFile = Files.createTempFile("ingestion-task-" + this.getJob().getId().toString(), "avro").toFile();
-        final AvroRecordAppender<? extends SpecificRecord> appender = integration.avroType().createAvroRecordAppender(outputFile, CodecFactoryProvider.codecFactory());
+        final AvroRecordAppender<? extends SpecificRecord> appender = integration.avroType().createAvroRecordAppender(outputFile, avroCodec);
 
         fetcher.fetchProcessedData(new FetchProcessedData(this.getTask(), appender));
 

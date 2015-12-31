@@ -46,7 +46,7 @@ class CommanderActor
     //  Executor JAR file
     setup.addToClasspath(new File(classOf[ExecutorMain].getProtectionDomain.getCodeSource.getLocation.getFile))
     setup.addToClasspath(jarFiles.map(_.file))
-    val executor = setup.launchWithArgs(socket.getLocalPort, integration.integrationClass, config.taskLogStrategy)
+    val executor = setup.launchWithArgs(socket.getLocalPort, integration.integrationClass, config.taskLogStrategy, config.avroFileCodec)
     new SimpleCommander(executor, socket)
   }
 

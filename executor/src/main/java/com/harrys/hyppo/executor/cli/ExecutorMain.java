@@ -1,5 +1,7 @@
 package com.harrys.hyppo.executor.cli;
 
+import org.apache.avro.file.CodecFactory;
+
 /**
  * Created by jpetty on 7/21/15.
  */
@@ -10,6 +12,7 @@ public final class ExecutorMain {
         Integer commanderPort    = null;
         String  integrationName  = null;
         LogStrategy  logStrategy = null;
+        CodecFactory avroCodec   = null;
 
         //  Parse the command line options
         try {
@@ -21,12 +24,13 @@ public final class ExecutorMain {
             }
             integrationName = System.getProperty("executor.integrationClass");
             logStrategy     = LogStrategy.fromConfigName(System.getProperty("executor.logStrategy"));
+            avroCodec       = CodecFactory.fromString(System.getProperty("executor.avroFileCodec"));
         } catch (Exception e){
             System.err.println("Failed to parse executor options:\n" + e.getMessage());
             System.exit(1);
         }
 
-        final ExecutorCommandLoop looper = new ExecutorCommandLoop(commanderPort, integrationName, logStrategy);
+        final ExecutorCommandLoop looper = new ExecutorCommandLoop(commanderPort, integrationName, logStrategy, avroCodec);
 
         try {
             looper.runUntilExitCommand();
