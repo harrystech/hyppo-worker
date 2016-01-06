@@ -60,7 +60,7 @@ class CommanderActor
   }
 
   override def postStop() : Unit = {
-    Try(simpleCommander.sendExitCommandAndWaitThenKill(Duration(1, SECONDS)))
+    Try(simpleCommander.sendExitCommandAndWaitThenKill(Duration(2, SECONDS)))
     Try(simpleCommander.executor.deleteFiles())
   }
 
@@ -206,7 +206,7 @@ class CommanderActor
 
 
   def performRawDataProcessing(taskActor: ActorRef, input: ProcessRawDataRequest) : Future[Unit] = {
-    val filesFuture  = Future.sequence(input.files.map(dataHandler.download))
+    val filesFuture  = handleDownloadFailure(taskActor, input, Future.sequence(input.files.map(dataHandler.download)))
     val outputFuture = filesFuture.map { files =>
       taskActor ! TaskFSMEvent.OperationStarting
       simpleCommander.executeCommand(new ProcessRawDataCommand(input.task, JavaConversions.seqAsJavaList(files)))
@@ -224,7 +224,7 @@ class CommanderActor
   }
 
   def performProcessedDataPersisting(taskActor: ActorRef, input: PersistProcessedDataRequest) : Future[Unit] = {
-    val fileFuture = dataHandler.download(input.data)
+    val fileFuture   = handleDownloadFailure(taskActor, input, dataHandler.download(input.data))
     val outputFuture = fileFuture.map { data =>
       taskActor ! TaskFSMEvent.OperationStarting
       simpleCommander.executeCommand(new PersistProcessedDataCommand(input.task, data))
@@ -250,6 +250,17 @@ class CommanderActor
         val response  = HandleJobCompletedResponse(input, remoteLog)
         taskActor ! TaskFSMEvent.OperationResponseAvailable(response)
         uploadLogFuture(taskActor, input, logFile)
+    }
+  }
+
+  def handleDownloadFailure[T](taskActor: ActorRef, input: WorkerInput, download: Future[T]): Future[T] = {
+    download.andThen {
+      case Success(_) =>
+        log.debug(s"File dependencies for task ${ input.executionId } downloaded and ready")
+      case Failure(e) =>
+        log.warning(s"Failure downloading dependencies for task ${ input.executionId }")
+        taskActor ! TaskFSMEvent.TaskDependencyFailure(e)
+        self ! Failure(e)
     }
   }
 

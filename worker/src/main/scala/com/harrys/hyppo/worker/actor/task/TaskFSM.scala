@@ -5,7 +5,7 @@ import com.harrys.hyppo.Lifecycle.ImpendingShutdown
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.actor.amqp.{AMQPMessageProperties, AMQPSerialization}
 import com.harrys.hyppo.worker.actor.queue.WorkQueueExecution
-import com.harrys.hyppo.worker.actor.task.TaskFSMEvent.{OperationLogUploaded, OperationResponseAvailable, OperationStarting}
+import com.harrys.hyppo.worker.actor.task.TaskFSMEvent.{OperationLogUploaded, OperationResponseAvailable, OperationStarting, TaskDependencyFailure}
 import com.harrys.hyppo.worker.actor.task.TaskFSMStatus.{PerformingOperation, PreparingToStart, UploadingLogs}
 import com.harrys.hyppo.worker.api.proto.{FailureResponse, WorkerResponse}
 import com.thenewmotion.akka.rabbitmq.Channel
@@ -24,20 +24,24 @@ final class TaskFSM
 
   when(PreparingToStart){
     case Event(OperationStarting, _) =>
-      log.debug(s"Commander began running execution ${ execution.input.summaryString }")
+      log.debug("Commander began running execution {}", execution.input.summaryString)
       goto(PerformingOperation)
 
-    case Event(Terminated(actor), _) if actor.equals(commander)  =>
-      log.warning(s"Commander exited before starting ${ execution.input.summaryString }. Requeueing operation.")
+    case Event(TaskDependencyFailure(error), _) =>
+      log.warning("Downloading task inputs failed for execution {} - {}", execution.input.summaryString, error)
       releaseWorkForRetry()
+      context.unwatch(commander)
+      stop(FSM.Shutdown)
+
+    case Event(Terminated(actor), _) if actor.equals(commander)  =>
+      log.warning("Commander exited before starting {}. Requeueing operation.", execution.input.summaryString)
+      releaseWorkForRetry()
+      context.unwatch(commander)
       stop(FSM.Shutdown)
 
     case Event(ImpendingShutdown, _) =>
       log.warning(s"Shutdown pending. ${ execution.input.summaryString } be sent back to queue")
-      execution.tryWithChannel { c =>
-        c.basicReject(execution.headers.deliveryTag, true)
-        execution.leases.releaseAll()
-      }
+      releaseWorkForRetry()
       context.unwatch(commander)
       stop(FSM.Shutdown)
   }
@@ -54,7 +58,7 @@ final class TaskFSM
       goto(UploadingLogs)
 
     case Event(OperationResponseAvailable(response), _) =>
-      log.debug(s"${ execution.input.summaryString } produced results successfully")
+      log.debug("{} produced results successfully", execution.input.summaryString)
       completeWithResponse(response)
       goto(UploadingLogs)
 
@@ -78,7 +82,7 @@ final class TaskFSM
 
   when(UploadingLogs) {
     case Event(OperationLogUploaded, _) =>
-      log.debug(s"Log upload for ${ execution.input.summaryString } completed successfully")
+      log.debug("Log upload for {} completed successfully", execution.input.summaryString)
       taskFullyCompleted()
 
     case Event(Terminated(actor), _) if actor.equals(commander) =>
@@ -102,12 +106,12 @@ final class TaskFSM
       execution.withChannel(_.basicAck(execution.headers.deliveryTag, false))
 
     //  Always log transition details
-    case from -> to => logTransitionDetails(from, to)
+    case from -> to => log.debug("{} - {} => {}", execution.input.summaryString, from, to)
   }
 
   onTermination {
     case StopEvent(reason, state, _) =>
-      log.debug(s"Stopped ${execution.input.summaryString} :: ${ state } - ${ reason.toString }")
+      log.debug("Stopped {} :: {} - {}", execution.input.summaryString, state, reason)
   }
 
   private val serialization = new AMQPSerialization(config.secretKey)
@@ -122,10 +126,6 @@ final class TaskFSM
   //
   // Begin Helpers
   //
-
-  def logTransitionDetails(from: TaskFSMStatus, to: TaskFSMStatus): Unit = {
-    log.debug(s"${ execution.input.summaryString } - ${ from } => ${ to }")
-  }
 
   def releaseWorkForRetry() : Unit = {
     execution.withChannel { channel =>
@@ -149,14 +149,14 @@ final class TaskFSM
   }
 
   def sendAckForItem(channel: Channel): Unit = {
-    log.debug(s"Sending RabbitMQ ACK for ${ execution.input.summaryString }")
+    log.debug("Sending RabbitMQ ACK for {}", execution.input.summaryString)
     channel.basicAck(execution.headers.deliveryTag, false)
   }
 
   def publishWorkResponse(channel: Channel, response: WorkerResponse) : Unit = {
     val body  = serialization.serialize(response)
     val props = AMQPMessageProperties.replyProperties(execution.headers)
-    log.debug(s"Publishing response for ${ execution.input.summaryString } to queue ${ execution.headers.replyToQueue } : ${ response.toString }")
+    log.debug("Publishing response for {} to queue {} : {}", execution.input.summaryString, execution.headers.replyToQueue, response)
     channel.basicPublish("", execution.headers.replyToQueue, true, false, props, body)
   }
 }

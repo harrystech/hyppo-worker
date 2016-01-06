@@ -1,5 +1,6 @@
 package com.harrys.hyppo.worker.actor.task
 
+import java.io.IOException
 import java.util.UUID
 
 import akka.actor.{Kill, Terminated}
@@ -22,15 +23,50 @@ class TaskFSMTests extends RabbitMQTests("TaskFSMTests", TestConfig.workerWithRa
   val testJob     = TestObjects.testIngestionJob(testSource)
 
   "The TaskFSM" when {
+
+    "downloading dependencies fails" must {
+      val testSource  = TestObjects.testIngestionSource(name = "Special Source with Unique Name")
+      val testJob     = TestObjects.testIngestionJob(testSource)
+      val testTask    = TestObjects.testIngestionTask(testJob)
+      val integration = TestObjects.testProcessedDataIntegration(source = testSource, semantics = PersistingSemantics.Unsafe)
+      val testRemote  = RemoteStorageLocation(config.dataBucketName, "")
+      val testInput   = PersistProcessedDataRequest(integration, UUID.randomUUID(), Seq(), testTask, RemoteProcessedDataFile(testRemote, 0, Array[Byte](), 0))
+      val channel     = connection.createChannel()
+      val testItem    = enqueueThenDequeue(channel, testInput)
+      val commander   = TestProbe()
+      val taskFSM     = TestFSMRef(new TaskFSM(config, testItem, commander.ref))
+
+      "hold the work exclusively" in {
+        eventually {
+          helpers.checkQueueSize(connection, testItem.headers.sourceQueue) shouldEqual 0
+        }
+      }
+
+      "send the work item on initialization" in {
+        commander.expectMsg(testItem.input)
+        taskFSM.stateName should equal(PreparingToStart)
+      }
+
+      "restart with retry once the commander signals dependency failure" in {
+        watch(taskFSM)
+        commander.forward(taskFSM, TaskFSMEvent.TaskDependencyFailure(new IOException("Couldn't download stuff")))
+        expectMsgType[Terminated]
+        eventually {
+          helpers.checkQueueSize(connection, testItem.headers.sourceQueue) shouldEqual 1
+        }
+      }
+    }
+
     "handling idempotent work" must {
       val testInput     = CreateIngestionTasksRequest(integration, UUID.randomUUID(), Seq(), testJob)
       val channel       = connection.createChannel()
       val testExecution = enqueueThenDequeue(channel, testInput)
+      val commander     = TestProbe()
 
-      val taskFSM = TestFSMRef(new TaskFSM(config, testExecution, self))
+      val taskFSM = TestFSMRef(new TaskFSM(config, testExecution, commander.ref))
 
       "send the work item once it initializes" in {
-        expectMsg(testExecution.input)
+        commander.expectMsg(testExecution.input)
         taskFSM.stateName should equal(PreparingToStart)
       }
 
