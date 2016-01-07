@@ -40,9 +40,9 @@ final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val 
     val location   = remote.location
     blocking {
       val s3Object = client.getObject(location.bucket, location.key)
-      assertChecksumMatch(s3Object, remote)
       val stream   = s3Object.getObjectContent
       try {
+        assertChecksumMatch(s3Object, remote)
         val local  = files.newFile(FilenameUtils.getBaseName(location.key), FilenameUtils.getExtension(location.key))
         FileUtils.copyInputStreamToFile(stream, local)
         local

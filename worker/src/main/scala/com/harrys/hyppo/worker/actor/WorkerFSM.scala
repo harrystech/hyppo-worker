@@ -19,6 +19,7 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.Failure
 
+
 /**
  * Created by jpetty on 10/30/15.
  */
@@ -110,15 +111,20 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
       log.warning("Unexpected RequestWorkEvent received while processing. Likely a race-condition inside mailbox.")
       stay()
 
-    case Event(Terminated(stopped), active: ActiveCommander) if stopped.equals(active.taskActor) =>
+    case Event(Terminated(stopped), active: ActiveCommander) if stopped == active.taskActor =>
       log.debug("Task actor exited successfully")
       active.workPreference match {
         case Some(prefer) =>
           goto(Available) using active.copy(taskActor = null)
         case None =>
-          context.stop(active.commander)
+          context.stop(context.unwatch(active.commander))
           goto(Idle) using Uninitialized
       }
+
+    case Event(Terminated(stopped), active: ActiveCommander) if stopped == active.commander =>
+      log.error("Commander Actor {} terminated unexpectedly while processing work.", active.commander)
+      context.unwatch(active.taskActor)
+      goto(Idle) using Uninitialized
 
     case Event(channelError: ShutdownSignalException, active: ActiveCommander) =>
       log.error(channelError, "Channel closed while work was in progress. Killing commander.")
@@ -129,7 +135,7 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
     case Event(StateTimeout, active: ActiveCommander) =>
       log.error("Current work timed out in running state. Transitioning back to idle")
       context.unwatch(active.taskActor)
-      context.stop(active.commander)
+      context.stop(context.unwatch(active.commander))
       goto(Idle) using Uninitialized
   }
 
@@ -145,9 +151,13 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
 
         case None =>
           log.debug("Losing current work affinity and transitioning to idle state")
-          context.stop(active.commander)
+          context.stop(context.unwatch(active.commander))
           goto(Idle) using Uninitialized
       }
+
+    case Event(Terminated(actor), ActiveCommander(commander, _, _)) if actor == commander =>
+      log.info("Commander Actor {} terminated while not in use. Transitioning to idle state.", actor)
+      goto(Idle) using Uninitialized
 
     case Event(channelError: ShutdownSignalException, active: ActiveCommander) =>
       log.error(channelError, "Channel closed while in available state. Transitioning to idle until channel stabilizes")
@@ -156,17 +166,17 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
 
     case Event(item @ WorkQueueExecution(_, _, input: IntegrationWorkerInput, _), active @ ActiveCommander(commander, _, Some(affinity))) =>
       if (active.isSameCode(input.integration)){
-        log.debug(s"Reusing previous commander for pre-loaded integration: ${affinity.integration.sourceName}")
+        log.debug("Reusing previous commander for pre-loaded integration: {}", affinity.integration.sourceName)
         val taskActor = createTaskActor(item, commander)
         goto(Running) using ActiveCommander(commander, taskActor, Some(affinity))
       } else {
-        log.debug(s"Restarting commander for fresh integration: ${ input.integration.sourceName }")
+        log.debug("Restarting commander for fresh integration: {}", input.summaryString)
         context.stop(context.unwatch(active.commander))
         goto(LoadingCode) using WaitingForJars(item)
       }
 
     case Event(item @ WorkQueueExecution(_, _, input: GeneralWorkerInput, _), ActiveCommander(commander, _, _)) =>
-      log.debug(s"Restarting commander for general work request: ${input.integration.sourceName}")
+      log.debug("Restarting commander for general work request: {}", input.summaryString)
       context.stop(context.unwatch(commander))
       goto(LoadingCode) using WaitingForJars(item)
 
@@ -175,7 +185,7 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
   whenUnhandled {
     case Event(JarLoadingActor.JarsResult(jars), _) =>
       val jarNames = jars.map(j => FilenameUtils.getBaseName(j.key.key))
-      log.warning(s"Received unexpected jar loading result: ${ jarNames.mkString(", ") }. Deleting jars and staying in current state: $stateName")
+      log.warning("Received unexpected jar loading result:  {}. Deleting jars and staying in current state: {}", jarNames.mkString(", "), stateName)
       jars.foreach(j => FileUtils.deleteQuietly(j.file))
       stay()
 
@@ -184,14 +194,11 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
       stop()
 
     case Event(Lifecycle.ImpendingShutdown, state) =>
-      log.error(s"Received impending shutdown while in state: ${state.toString}")
+      log.error("Received impending shutdown while in state: {}", state)
       stop()
 
-    case Event(msg, active: ActiveCommander) =>
-      stop(FSM.Failure(s"Shutting down. Unexpected message received: ${msg.toString}"))
-
     case Event(msg, _) =>
-      stop(FSM.Failure(s"Shutting down. Unexpected message received: ${msg.toString}"))
+      stop(FSM.Failure("Shutting down. Unexpected message received: " + msg.toString))
   }
 
   onTermination {
@@ -199,21 +206,21 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
       stopPollingForWork()
       context.stop(context.unwatch(jarLoadingActor))
       context.stop(context.unwatch(channelActor))
-      log.info(s"WorkerFSM stopped successfully from state: ${ stateName }")
+      log.info("WorkerFSM stopped successfully from state: {}", stateName)
 
     case StopEvent(_, _, active: ActiveCommander) =>
       stopPollingForWork()
       context.stop(context.unwatch(jarLoadingActor))
       Option(active.taskActor).foreach(a => context.unwatch(a))
-      Await.result(gracefulStop(active.commander, config.workerShutdownTimeout), config.workerShutdownTimeout)
+      Await.result(gracefulStop(context.unwatch(active.commander), config.workerShutdownTimeout), config.workerShutdownTimeout)
       context.stop(context.unwatch(channelActor))
-      log.info(s"WorkerFSM stopped successfully from state: ${ stateName }")
+      log.info("WorkerFSM stopped successfully from state: {}", stateName)
 
     case StopEvent(_, _, _) =>
       stopPollingForWork()
       context.stop(context.unwatch(jarLoadingActor))
       context.stop(context.unwatch(channelActor))
-      log.info(s"WorkerFSM stopped successfully from state: ${ stateName }")
+      log.info("WorkerFSM stopped successfully from state: {}", stateName)
   }
 
   onTransition {
@@ -243,7 +250,7 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
 
   def createCommanderActor(execution: WorkQueueExecution, jarFiles: Seq[LoadedJarFile]) : ActiveCommander = {
     commanderCounter += 1
-    val commander = context.actorOf(Props(classOf[CommanderActor], config, execution.input.code, jarFiles), name = "commander-" + commanderCounter)
+    val commander = context.watch(context.actorOf(Props(classOf[CommanderActor], config, execution.input.code, jarFiles), name = "commander-" + commanderCounter))
     val taskActor = createTaskActor(execution, commander)
     execution.input match {
       case work: IntegrationWorkerInput =>
@@ -302,5 +309,8 @@ object WorkerFSM {
     }
   }
 
+  /**
+    * Objected used by the [[WorkerFSM]] to indicate that work polling should be attempted
+    */
   case object RequestWorkEvent
 }

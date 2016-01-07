@@ -22,6 +22,8 @@ final class TaskFSM
   commander:  ActorRef
 ) extends FSM[TaskFSMStatus, Unit] with ActorLogging {
 
+  private val serialization = new AMQPSerialization(config.secretKey)
+
   when(PreparingToStart){
     case Event(OperationStarting, _) =>
       log.debug("Commander began running execution {}", execution.input.summaryString)
@@ -48,12 +50,12 @@ final class TaskFSM
 
   when(PerformingOperation){
     case Event(OperationStarting, _) =>
-      log.warning(s"Received unexpected duplicate ${ OperationStarting.productPrefix } message")
+      log.warning(s"Received unexpected duplicate {} message", OperationStarting.productPrefix)
       stay()
 
     case Event(OperationResponseAvailable(fail: FailureResponse), _) =>
       val summary = fail.exception.map(_.summary).getOrElse("<unknown failure>")
-      log.error(s"${ execution.input.summaryString } failed. Sending response to results queue. Failure: ${ summary }")
+      log.error("{} failed. Sending response to results queue. Failure: {}", execution.input.summaryString, summary)
       completeWithResponse(fail)
       goto(UploadingLogs)
 
@@ -63,7 +65,7 @@ final class TaskFSM
       goto(UploadingLogs)
 
     case Event(Terminated(actor), _) if actor.equals(commander) =>
-      log.error(s"Unexpected commander termination while executing: ${ execution.input.summaryString }")
+      log.error("Unexpected commander termination while executing: {}", execution.input.summaryString)
       Try(execution.leases.releaseAll())
       stop(FSM.Failure("Commander actor terminated unexpectedly."))
 
@@ -114,11 +116,10 @@ final class TaskFSM
       log.debug("Stopped {} :: {} - {}", execution.input.summaryString, state, reason)
   }
 
-  private val serialization = new AMQPSerialization(config.secretKey)
-  startWith(PreparingToStart, Nil)
-  initialize()
   //  The TaskFSM needs notification if the commander dies
   context.watch(commander)
+  startWith(PreparingToStart, Nil)
+  initialize()
 
   //  AND GO
   commander ! execution.input

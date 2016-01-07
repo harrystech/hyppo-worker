@@ -124,6 +124,9 @@ final case class FetchProcessedDataRequest
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
   override def logicalOperation: LogicalOperation = LogicalOperation.FetchProcessedData
+  override def summaryString: String = {
+    s"$productPrefix(execution=$executionId source=${source.getName} job=${job.getId} task=${task.getTaskNumber})"
+  }
 }
 
 
@@ -154,6 +157,9 @@ final case class FetchRawDataRequest
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
   override def logicalOperation: LogicalOperation = LogicalOperation.FetchRawData
+  override def summaryString: String = {
+    s"$productPrefix(execution=$executionId source=${source.getName} job=${job.getId} task=${task.getTaskNumber})"
+  }
 }
 
 @SerialVersionUID(1L)
@@ -182,6 +188,9 @@ final case class ProcessRawDataRequest
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
   override def logicalOperation: LogicalOperation = LogicalOperation.ProcessRawData
+  override def summaryString: String = {
+    s"$productPrefix(execution=$executionId source=${source.getName} job=${job.getId} task=${task.getTaskNumber})"
+  }
 }
 
 @SerialVersionUID(1L)
@@ -215,6 +224,9 @@ final case class PersistProcessedDataRequest
 ) extends IntegrationWorkerInput {
   override def job: DataIngestionJob = task.getIngestionJob
   override def logicalOperation: LogicalOperation = LogicalOperation.PersistProcessedData
+  override def summaryString: String = {
+    s"$productPrefix(execution=$executionId source=${source.getName} job=${job.getId} task=${task.getTaskNumber})"
+  }
 }
 
 @SerialVersionUID(1L)

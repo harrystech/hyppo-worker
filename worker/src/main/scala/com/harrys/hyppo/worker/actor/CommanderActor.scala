@@ -75,19 +75,20 @@ class CommanderActor
         throw new IllegalStateException(s"CommanderActor should never receive ${ WorkCompletedMessage.productPrefix } when not running work")
       }
       isRunningWork = false
-      log.debug(s"Commander ${ self.path.name } is now available")
+      log.debug("Commander is now available")
 
     case Failure(e) =>
-      log.error("Restarting commander due to previous failure")
-      throw e
+      log.error("Terminating commander due to previous failure")
+      context.stop(self)
 
     case input: WorkerInput =>
       if (isRunningWork){
-        throw new IllegalStateException("Executor should never receive work while still running previous jobs!")
+        throw new IllegalStateException("Commander received work while still running: " + input.summaryString)
       }
-      log.debug(s"Commander ${ self.path.name } starting work on ${ input.summaryString }")
-      isRunningWork  = true
       val taskActor  = sender()
+      log.debug("Commander starting work on {} for Task Actor {}", input.summaryString, taskActor)
+      isRunningWork  = true
+
       executeWorkRequest(taskActor, input).onComplete {
         case Success(result) =>
           log.debug(s"Successfully completed task ${ input.executionId } with result ${ result }")
@@ -256,9 +257,9 @@ class CommanderActor
   def handleDownloadFailure[T](taskActor: ActorRef, input: WorkerInput, download: Future[T]): Future[T] = {
     download.andThen {
       case Success(_) =>
-        log.debug(s"File dependencies for task ${ input.executionId } downloaded and ready")
+        log.debug("File dependencies for task {} downloaded and ready", input.summaryString)
       case Failure(e) =>
-        log.warning(s"Failure downloading dependencies for task ${ input.executionId }")
+        log.error(e, "Failure downloading dependencies for task {}", input.summaryString)
         taskActor ! TaskFSMEvent.TaskDependencyFailure(e)
         self ! Failure(e)
     }
@@ -267,12 +268,16 @@ class CommanderActor
   def handleCommandException(taskActor: ActorRef, input: WorkerInput, future: Future[CommandOutput]): Future[CommandOutput] = {
     future.andThen {
       case Failure(e: CommandExecutionException) =>
-        log.debug(s"Failure executing task ${ input.executionId }. ${ e.error.summary }")
+        log.error("Failure executing task {} - {}", input.summaryString, e.error.summary)
         val remoteLog = e.executorLog.map(_ => dataHandler.remoteLogLocation(input))
         taskActor ! TaskFSMEvent.OperationResponseAvailable(FailureResponse(input, remoteLog, Some(e.error)))
         uploadLogFuture(taskActor, input, e.executorLog).andThen {
           case _ => self ! Failure(e)
         }
+      //  Still bail on unexpected failure case.
+      case Failure(e) =>
+        log.error(e, "Unexpected failure for {} instead of command exception", input.summaryString)
+        self ! Failure(e)
     }
   }
 
@@ -289,9 +294,9 @@ class CommanderActor
       val complete = dataHandler.uploadLogFile(task, logFile)
       Future.firstCompletedOf(Seq(timeout, complete)).andThen {
         case Success(uploaded) =>
-          log.debug(s"Successfully uploaded log for task ${ task.executionId } to s3://${uploaded.location.bucket}/${ uploaded.location.key.toString }")
+          log.debug("Successfully uploaded log for task {} to s3://{}/{}", task.executionId, uploaded.location.bucket, uploaded.location.key)
         case Failure(e) =>
-          log.error(e, s"Failed to upload log file for task ${ task.executionId }")
+          log.error(e, "Failed to upload log file for task {}", task.executionId)
       }.andThen {
         case _ =>
           taskActor ! TaskFSMEvent.OperationLogUploaded
