@@ -76,6 +76,7 @@ class CommanderActor
         self ! Failure(new IllegalStateException(s"Commander should never receive ${WorkCompletedMessage.productPrefix} when not running work"))
       } else {
         isRunningWork = false
+        simpleCommander.executor.files.cleanupLogs()
         log.debug("Commander is now available")
       }
 
@@ -95,7 +96,6 @@ class CommanderActor
         executeWorkRequest(taskActor, input).onComplete {
           case Success(_) =>
             log.info("Successfully completed task {}", input.summaryString)
-            self ! WorkCompletedMessage
           case Failure(e: CommandExecutionException) =>
             log.debug("Failure already handled at task actor level. Restarting.")
             self ! Failure(e)
@@ -289,6 +289,7 @@ class CommanderActor
     if (!config.uploadTaskLog || taskLog.isEmpty){
       Future[Unit]({
         log.debug("Log uploads are disabled. Notifying task actor of completion")
+        self ! WorkCompletedMessage
         taskActor ! TaskFSMEvent.OperationLogUploaded
       })
     } else {
@@ -299,12 +300,12 @@ class CommanderActor
       Future.firstCompletedOf(Seq(timeout, complete)).andThen {
         case Success(uploaded) =>
           log.debug("Successfully uploaded log for task {} to s3://{}/{}", task.executionId, uploaded.location.bucket, uploaded.location.key)
+          self ! WorkCompletedMessage
+          taskActor ! TaskFSMEvent.OperationLogUploaded
         case Failure(e) =>
           log.error(e, "Failed to upload log file for task {}", task.executionId)
-      }.andThen {
-        case _ =>
+          self ! WorkCompletedMessage
           taskActor ! TaskFSMEvent.OperationLogUploaded
-          simpleCommander.executor.files.cleanupLogs()
       }.map { _ => () }
     }
   }
