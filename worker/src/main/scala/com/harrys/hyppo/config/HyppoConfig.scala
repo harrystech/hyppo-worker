@@ -64,6 +64,10 @@ abstract class HyppoConfig(config: Config) extends Serializable {
     val factory = new ConnectionFactory()
     factory.setUri(config.getString("hyppo.rabbitmq.uri"))
     factory.setConnectionTimeout(rabbitMQTimeout.toMillis.toInt)
+    if (config.hasPath("hyppo.rabbitmq.amqp-security-mode") &&
+      !"none".equalsIgnoreCase(config.getString("hyppo.rabbitmq.amqp-security-mode"))){
+      factory.useSslProtocol(config.getString("hyppo.rabbitmq.amqp-security-mode"))
+    }
     factory
   }
 

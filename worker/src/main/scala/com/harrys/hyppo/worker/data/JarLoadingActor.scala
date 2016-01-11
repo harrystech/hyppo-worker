@@ -9,7 +9,7 @@ import com.amazonaws.services.s3.AmazonS3Client
 import com.amazonaws.services.s3.model.S3Object
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.api.proto.RemoteStorageLocation
-import org.apache.commons.io.{FileCleaningTracker, FileUtils, FilenameUtils}
+import org.apache.commons.io.{IOUtils, FileCleaningTracker, FileUtils, FilenameUtils}
 
 import scala.concurrent.Future
 
@@ -22,8 +22,8 @@ final class JarLoadingActor(config: WorkerConfig) extends Actor with ActorLoggin
   private val tracker  = new FileCleaningTracker()
 
   override def postStop(): Unit = {
-    super.postStop()
     tracker.exitWhenFinished()
+    super.postStop()
   }
 
   override def receive: Receive = {
@@ -32,14 +32,14 @@ final class JarLoadingActor(config: WorkerConfig) extends Actor with ActorLoggin
   }
 
   def loadJarFiles(jarFiles: Seq[RemoteStorageLocation], recipient: ActorRef) : Unit = {
-    Future.sequence(
-      jarFiles.map(jar => loadedJarFuture(jar))
-    ).map(jars => JarsResult(jars)).pipeTo(recipient)
+    val downloads = jarFiles.map(jar => loadedJarFuture(jar))
+    val combined  = Future.sequence(downloads).map(jars => JarsResult(jars))
+    combined.pipeTo(recipient)
   }
 
 
   private def loadedJarFuture(jar: RemoteStorageLocation) : Future[LoadedJarFile] = Future {
-    log.debug(s"Loading Jar File From S3: ${jar.toString}")
+    log.debug("Loading Jar File From S3: {}", jar)
     val s3Object = client.getObject(jar.bucket, jar.key)
     try {
       val tempFile = downloadToFile(s3Object, Files.createTempFile(FilenameUtils.removeExtension(FilenameUtils.getBaseName(jar.key)), "jar").toFile)
@@ -47,9 +47,7 @@ final class JarLoadingActor(config: WorkerConfig) extends Actor with ActorLoggin
       tracker.track(tempFile, jar)
       //  Since we return the result with the key attached, we can guarantee that the file lives as long as the cached value
       LoadedJarFile(jar, tempFile)
-    } finally {
-      s3Object.close()
-    }
+    } finally IOUtils.closeQuietly(s3Object)
   }
 
 
