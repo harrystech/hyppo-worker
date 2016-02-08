@@ -3,6 +3,7 @@ package com.harrys.hyppo.worker.actor.amqp
 import java.net.URLEncoder
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Collections
 
 import com.harrys.hyppo.util.TimeUtils
 import com.rabbitmq.client.ConnectionFactory
@@ -22,7 +23,6 @@ import org.json4s.DefaultFormats
 import org.json4s.jackson.JsonMethods
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConversions
 import scala.concurrent.duration._
 
 /**
@@ -47,7 +47,9 @@ final class RabbitHttpClient(server: ConnectionFactory, port: Int, useSSL: Boole
           val size = (queue \ "messages").extract[Option[Int]].getOrElse(0)
           val rate = (queue \ "messages_details" \ "rate").extract[Option[Double]].getOrElse(0.0)
           val idle = (queue \ "idle_since").extract[Option[String]].map(LocalDateTime.parse(_, format))
-          SingleQueueDetails(name, size, rate, idle.getOrElse(TimeUtils.currentLocalDateTime()))
+          val ready   = (queue \ "messages_ready").extract[Option[Int]].getOrElse(0)
+          val unacked = (queue \ "messages_unacknowledged").extract[Option[Int]].getOrElse(0)
+          SingleQueueDetails(queueName = name, size = size, rate = rate, ready = ready, unacknowledged = unacked, idleSince = idle.getOrElse(TimeUtils.currentLocalDateTime()))
         } catch {
           case e: Exception =>
             throw new Exception(s"Failed to parse expected RabbitMQ structure from: ${compact(queue)}", e)
@@ -95,7 +97,7 @@ final class RabbitHttpClient(server: ConnectionFactory, port: Int, useSSL: Boole
     val provider = new BasicCredentialsProvider()
     provider.setCredentials(new AuthScope(server.getHost, port), credentials)
 
-    val headers = JavaConversions.asJavaCollection(Seq(new BasicHeader(HttpHeaders.ACCEPT, "application/json")))
+    val headers  = Collections.singletonList(new BasicHeader(HttpHeaders.ACCEPT, "application/json"))
 
     HttpClients.custom()
       .setDefaultRequestConfig(defaultRequestConfig.build())

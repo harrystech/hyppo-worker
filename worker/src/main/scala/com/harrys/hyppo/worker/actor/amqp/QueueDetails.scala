@@ -9,9 +9,11 @@ import scala.concurrent.duration._
 /**
   * Created by jpetty on 11/9/15.
   */
-sealed trait QueueDetails {
+sealed trait QueueDetails extends Product { self =>
   def size: Int
   def rate: Double
+  def ready: Int
+  def unacknowledged: Int
   def idleSince: LocalDateTime
   final def isEmpty: Boolean = size <= 0
   final def estimatedCompletionTime: Duration = {
@@ -26,6 +28,10 @@ sealed trait QueueDetails {
       }
     }
   }
+
+  override def toString: String = {
+    s"${self.productPrefix}(size=$size rate=$rate ready=$ready unacked=$unacknowledged idleSince=$idleSince)"
+  }
 }
 
 final case class SingleQueueDetails
@@ -33,6 +39,8 @@ final case class SingleQueueDetails
   queueName: String,
   override val size: Int,
   override val rate: Double,
+  override val ready: Int,
+  override val unacknowledged: Int,
   override val idleSince: LocalDateTime
 ) extends QueueDetails
 
@@ -49,6 +57,10 @@ final case class MultiQueueDetails
   }
 
   override def size: Int = queues.map(_.size).sum
+
+  override def ready: Int = queues.map(_.ready).sum
+
+  override def unacknowledged: Int = queues.map(_.unacknowledged).sum
 
   override def rate: Double = {
     if (queues.isEmpty){

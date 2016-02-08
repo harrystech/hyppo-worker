@@ -43,21 +43,28 @@ testOptions in Test += Tests.Setup(() => {
   System.setProperty("testing.classpath", (fullClasspath in Test).value.files.map(_.getAbsolutePath).mkString(":"))
 })
 
+javaOptions in Test += "-Dtesting.classpath=" + (fullClasspath in Test).value.files.map(_.getAbsolutePath).mkString(":")
+
 //  Setup the J-Unit arguments for testing
 testOptions += Tests.Argument(TestFrameworks.ScalaTest)
+
+exportJars := true
 
 // --
 // Console Testing Setup
 // --
 
-initialCommands in console :=
-  """
+initialCommands in (console in Test) :=
+  s"""
     |import akka.actor._
     |import com.harrys.hyppo.HyppoWorker
     |import com.harrys.hyppo.worker._
     |import com.harrys.hyppo.config._
     |import com.typesafe.config._
     |import com.harrys.hyppo.worker.actor.amqp._
+    |import com.harrys.hyppo.worker.actor._
     |import java.io.File
+    |import java.util.UUID
+    |import java.time._
   """.stripMargin
 

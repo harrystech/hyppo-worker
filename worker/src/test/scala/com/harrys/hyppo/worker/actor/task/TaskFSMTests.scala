@@ -5,7 +5,6 @@ import java.util.UUID
 
 import akka.actor.{Kill, Terminated}
 import akka.testkit.{TestFSMRef, TestProbe}
-import com.harrys.hyppo.source.api.PersistingSemantics
 import com.harrys.hyppo.worker.actor.RabbitMQTests
 import com.harrys.hyppo.worker.actor.task.TaskFSMStatus.{PerformingOperation, PreparingToStart, UploadingLogs}
 import com.harrys.hyppo.worker.api.proto._
@@ -19,7 +18,7 @@ import org.scalatest.mock.MockitoSugar
 class TaskFSMTests extends RabbitMQTests("TaskFSMTests", TestConfig.workerWithRandomQueuePrefix()) with MockitoSugar with Eventually {
 
   val testSource  = TestObjects.testIngestionSource(name = "TaskFSM Test Source")
-  val integration = TestObjects.testProcessedDataIntegration(source = testSource, semantics = PersistingSemantics.Unsafe)
+  val integration = TestObjects.testProcessedDataIntegration(source = testSource)
   val testJob     = TestObjects.testIngestionJob(testSource)
 
   "The TaskFSM" when {
@@ -28,7 +27,7 @@ class TaskFSMTests extends RabbitMQTests("TaskFSMTests", TestConfig.workerWithRa
       val testSource  = TestObjects.testIngestionSource(name = "Special Source with Unique Name")
       val testJob     = TestObjects.testIngestionJob(testSource)
       val testTask    = TestObjects.testIngestionTask(testJob)
-      val integration = TestObjects.testProcessedDataIntegration(source = testSource, semantics = PersistingSemantics.Unsafe)
+      val integration = TestObjects.testProcessedDataIntegration(source = testSource)
       val testRemote  = RemoteStorageLocation(config.dataBucketName, "")
       val testInput   = PersistProcessedDataRequest(integration, UUID.randomUUID(), Seq(), testTask, RemoteProcessedDataFile(testRemote, 0, Array[Byte](), 0))
       val channel     = connection.createChannel()

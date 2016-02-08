@@ -23,9 +23,10 @@ import scala.util.Failure
 /**
  * Created by jpetty on 10/30/15.
  */
-final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: ActorRef) extends LoggingFSM[WorkerState, CommanderState] {
+final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: ActorRef, jarLoadingActor: ActorRef) extends LoggingFSM[WorkerState, CommanderState] {
 
-  val jarLoadingActor = context.watch(context.actorOf(Props(classOf[JarLoadingActor], config)))
+  context.watch(jarLoadingActor)
+
   val channelActor    = {
     implicit val timeout = Timeout(config.rabbitMQTimeout)
     context.watch(connection.createChannel(ChannelActor.props(initializeWorkerChannel)))
@@ -263,6 +264,9 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
   }
 
   def initializeWorkerChannel(channel: Channel, actor: ActorRef) : Unit = {
+    //  Do not prefetch (although there should be no consumers)
+    channel.basicQos(0)
+    //  Notify this worker of shutdown
     channel.addShutdownListener(new ShutdownListener {
       override def shutdownCompleted(cause: ShutdownSignalException): Unit = {
         self ! cause
@@ -279,7 +283,6 @@ object WorkerFSM {
   case object Running extends WorkerState
   case object Available extends WorkerState
   case object LoadingCode extends WorkerState
-
 
   final case class WorkerAffinity(integration: ExecutableIntegration, expiration: Deadline) {
     def isExpired() : Boolean = expiration.isOverdue()

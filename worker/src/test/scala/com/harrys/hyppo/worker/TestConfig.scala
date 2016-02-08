@@ -1,5 +1,7 @@
 package com.harrys.hyppo.worker
 
+import java.io.File
+
 import com.harrys.hyppo.HyppoWorker
 import com.harrys.hyppo.config.{CoordinatorConfig, WorkerConfig}
 import com.harrys.hyppo.util.ConfigUtils
@@ -11,6 +13,13 @@ import scala.util.Random
  * Created by jpetty on 8/28/15.
  */
 object TestConfig {
+
+  def testingClasspath(): Seq[File] = {
+    val path = System.getProperty("testing.classpath")
+    val main = new File(classOf[HyppoWorker].getProtectionDomain.getCodeSource.getLocation.getFile).getAbsoluteFile
+    val test = new File(this.getClass.getProtectionDomain.getCodeSource.getLocation.getFile).getAbsoluteFile
+    if (path == null) Seq(main, test) else path.split(":").map(new File(_)) ++ Seq(main, test)
+  }
 
   def randomQueuePrefix(): String = {
     "hyppo-test-" + Random.alphanumeric.take(10).mkString

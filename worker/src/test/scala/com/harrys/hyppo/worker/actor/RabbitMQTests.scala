@@ -78,7 +78,7 @@ abstract class RabbitMQTests[T <: HyppoConfig](systemName: String, final val con
     }
   }
 
-  protected def enqueueWork(input: IntegrationWorkerInput) : String = {
+  protected def enqueueWork(input: IntegrationWorkerInput): String = {
     input.resources.foreach {
       case c: ConcurrencyWorkResource =>
         helpers.createConcurrencyResource(connection, c)

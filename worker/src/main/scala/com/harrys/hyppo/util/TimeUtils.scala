@@ -15,7 +15,7 @@ private[hyppo] object TimeUtils {
   final val UTCTimeZone   = TimeZone.getTimeZone(UTCTimeZoneId)
 
   def currentLocalDateTime(): LocalDateTime = {
-    LocalDateTime.now(UTCTimeZoneId)
+    LocalDateTime.now(Clock.systemUTC())
   }
 
   def currentLegacyDate() : Date = {

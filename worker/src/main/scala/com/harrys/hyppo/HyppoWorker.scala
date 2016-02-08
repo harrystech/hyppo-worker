@@ -7,6 +7,7 @@ import com.harrys.hyppo.util.ConfigUtils
 import com.harrys.hyppo.worker.actor.WorkerFSM
 import com.harrys.hyppo.worker.actor.amqp.RabbitQueueStatusActor
 import com.harrys.hyppo.worker.actor.queue.WorkDelegation
+import com.harrys.hyppo.worker.data.JarLoadingActor
 import com.thenewmotion.akka.rabbitmq._
 import com.typesafe.config.Config
 
@@ -28,7 +29,9 @@ final class HyppoWorker(val system: ActorSystem, val settings: WorkerConfig) {
   val delegation = system.actorOf(Props(classOf[WorkDelegation], settings), "delegation")
   val queueStats = system.actorOf(Props(classOf[RabbitQueueStatusActor], settings, delegation), "queue-stats")
   val workerFSMs = (1 to settings.workerCount).inclusive.map(i => {
-    system.actorOf(Props(classOf[WorkerFSM], settings, delegation, connection), "worker-%02d".format(i))
+    val name = "worker-%02d".format(i)
+    val jars = system.actorOf(Props(classOf[JarLoadingActor], settings))
+    system.actorOf(Props(classOf[WorkerFSM], settings, delegation, connection, jars), name)
   })
 
 

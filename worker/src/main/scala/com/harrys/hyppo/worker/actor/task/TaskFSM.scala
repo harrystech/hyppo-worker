@@ -116,10 +116,11 @@ final class TaskFSM
       log.debug("Stopped {} :: {} - {}", execution.input.summaryString, state, reason)
   }
 
-  //  The TaskFSM needs notification if the commander dies
-  context.watch(commander)
   startWith(PreparingToStart, Nil)
   initialize()
+
+  //  The TaskFSM needs notification if the commander dies
+  context.watch(commander)
 
   //  AND GO
   commander ! execution.input

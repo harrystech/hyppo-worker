@@ -1,0 +1,14 @@
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <!-- encoders are assigned the type
+             ch.qos.logback.classic.encoder.PatternLayoutEncoder by default -->
+        <encoder>
+            <pattern>%-5level %logger{36} [%X{akkaSource}] - %msg%n</pattern>
+        </encoder>
+    </appender>
+    <logger name="com.harrys.hyppo" level="INFO" />
+    <logger name="akka" level="WARN" />
+    <root level="INFO">
+        <appender-ref ref="STDOUT" />
+    </root>
+</configuration>

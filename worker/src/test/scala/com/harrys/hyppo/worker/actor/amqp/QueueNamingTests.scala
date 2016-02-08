@@ -21,8 +21,8 @@ class QueueNamingTests extends WordSpecLike with Matchers {
       val concurrency   = naming.concurrencyResource("example resource", 1)
       val queueDetails  = integrations.flatMap(i => {
         Seq(
-          SingleQueueDetails(naming.integrationWorkQueueName(i, Seq()), size = 0, rate = 0.0, idleSince = TimeUtils.currentLocalDateTime()),
-          SingleQueueDetails(naming.integrationWorkQueueName(i, Seq(concurrency)), size = 0, rate = 0.0, idleSince = TimeUtils.currentLocalDateTime())
+          SingleQueueDetails(naming.integrationWorkQueueName(i, Seq()), size = 0, rate = 0.0, ready = 0, unacknowledged = 0, idleSince = TimeUtils.currentLocalDateTime()),
+          SingleQueueDetails(naming.integrationWorkQueueName(i, Seq(concurrency)), size = 0, rate = 0.0, ready = 0, unacknowledged = 0, idleSince = TimeUtils.currentLocalDateTime())
         )
       })
       val grouping = naming.toLogicalQueueDetails(queueDetails)

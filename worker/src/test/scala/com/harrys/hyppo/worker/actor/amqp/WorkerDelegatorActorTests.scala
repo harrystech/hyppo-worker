@@ -27,7 +27,7 @@ class WorkerDelegatorActorTests extends RabbitMQTests("WorkerDelegatorActorTests
     }
 
     "respond to queue status updates by updating it status info" in {
-      val statuses = Seq(SingleQueueDetails(queueName = naming.generalQueueName, size = 0, rate = 0.0, LocalDateTime.now()))
+      val statuses = Seq(SingleQueueDetails(queueName = naming.generalQueueName, size = 0, rate = 0.0, ready = 0, unacknowledged = 0, LocalDateTime.now()))
       delegator ! RabbitQueueStatusActor.QueueStatusUpdate(statuses)
       delegator.underlyingActor.currentStats shouldEqual statuses.map(s => s.queueName -> s).toMap
     }
@@ -44,7 +44,7 @@ class WorkerDelegatorActorTests extends RabbitMQTests("WorkerDelegatorActorTests
       }
       val queues = workItems.map { item =>
         enqueueWork(item)
-        SingleQueueDetails(queueName = naming.integrationWorkQueueName(item), size = 1, rate = 0.0, idleSince = TimeUtils.currentLocalDateTime())
+        SingleQueueDetails(queueName = naming.integrationWorkQueueName(item), size = 1, rate = 0.0, ready = 0, unacknowledged = 0, idleSince = TimeUtils.currentLocalDateTime())
       }
       delegator ! RabbitQueueStatusActor.QueueStatusUpdate(queues)
       delegator.underlyingActor.currentStats shouldEqual queues.map(i => i.queueName -> i).toMap
@@ -68,7 +68,7 @@ class WorkerDelegatorActorTests extends RabbitMQTests("WorkerDelegatorActorTests
       val queueName   = enqueueWork(work)
       try {
         val probe = TestProbe()
-        delegator ! RabbitQueueStatusActor.QueueStatusUpdate(Seq(SingleQueueDetails(queueName  = queueName, size = 1, rate = 0.0, idleSince = LocalDateTime.now())))
+        delegator ! RabbitQueueStatusActor.QueueStatusUpdate(Seq(SingleQueueDetails(queueName  = queueName, size = 1, rate = 0.0, ready = 0, unacknowledged = 0, idleSince = LocalDateTime.now())))
         probe.send(delegator, RequestForPreferredWork(workerChan, integration))
         val reply = probe.expectMsgType[WorkQueueExecution]
         reply.input shouldBe a[CreateIngestionTasksRequest]

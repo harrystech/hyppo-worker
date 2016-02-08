@@ -31,7 +31,6 @@ final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging
   }
 
   override def receive: Receive = {
-
     case RequestForPreferredWork(channelActor, prefer) =>
       val worker  = sender()
       val filter  = naming.belongsToIntegration(prefer) _
@@ -57,7 +56,7 @@ final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging
           case Some(info) =>
             currentStats += name -> info.copy(size = size)
           case None =>
-            currentStats += name -> SingleQueueDetails(name, size, 0.0, TimeUtils.currentLocalDateTime())
+            currentStats += name -> SingleQueueDetails(queueName = name, size = size, ready = size, rate = 0.0, unacknowledged = 0, idleSince = TimeUtils.currentLocalDateTime())
         }
       }
 

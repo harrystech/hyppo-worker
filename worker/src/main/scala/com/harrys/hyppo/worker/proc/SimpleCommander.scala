@@ -21,13 +21,14 @@ import scala.concurrent.duration.{Deadline, FiniteDuration}
 final class SimpleCommander(val executor: LaunchedExecutor, server: ServerSocket) {
   private val log = Logger(LoggerFactory.getLogger(this.getClass))
 
-  def executeCommand(command: StartOperationCommand) : CommandOutput = {
+  @throws[CommandExecutionException]("if the task fails to run successfully inside of the executor")
+  def executeCommand(command: StartOperationCommand): CommandOutput = {
     val updater = (_: StatusUpdate) => {}
     executeCommand(command, updater)
   }
 
-  @throws[CommandExecutionException]("if the task fails to run successfully")
-  def executeCommand(command: StartOperationCommand, update: (StatusUpdate) => Unit) : CommandOutput = {
+  @throws[CommandExecutionException]("if the task fails to run successfully inside of the executor")
+  def executeCommand(command: StartOperationCommand, update: (StatusUpdate) => Unit): CommandOutput = {
     val handler = new OperationHandler(this.waitForNextConnection())
     try {
       handler.sendCommand(command)

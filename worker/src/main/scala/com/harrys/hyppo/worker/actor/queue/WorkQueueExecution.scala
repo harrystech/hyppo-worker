@@ -20,8 +20,7 @@ final case class WorkQueueExecution
   val idempotent: Boolean = input match {
     case p: PersistProcessedDataRequest if p.integration.details.persistingSemantics == PersistingSemantics.Unsafe =>
       false
-    case _ =>
-      false
+    case _ => true
   }
 
   def tryWithChannel[T](action: (Channel) => T) : Try[T] = {
