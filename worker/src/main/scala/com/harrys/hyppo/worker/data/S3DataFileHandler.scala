@@ -7,6 +7,7 @@ import javax.inject.Inject
 import com.amazonaws.services.s3.AmazonS3Client
 import com.amazonaws.services.s3.model.{PutObjectResult, S3Object}
 import com.amazonaws.util.Base64
+import com.google.inject.assistedinject.Assisted
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.source.api.model.DataIngestionTask
 import com.harrys.hyppo.worker.api.code.IntegrationUtils
@@ -20,8 +21,14 @@ import scala.concurrent._
 /**
   * Created by jpetty on 2/9/16.
   */
-@Inject
-class S3DataFileHandler(config: WorkerConfig, client: AmazonS3Client)(implicit ec: ExecutionContext) extends DataFileHandler {
+
+class S3DataFileHandler @Inject()
+(
+  config:              WorkerConfig,
+  client:              AmazonS3Client,
+  @Assisted tempFiles: TempFilePool
+)(implicit @Assisted ec: ExecutionContext) extends DataFileHandler {
+
   private val LocalDateFormat = ISODateTimeFormat.date()
 
   /**
@@ -34,14 +41,14 @@ class S3DataFileHandler(config: WorkerConfig, client: AmazonS3Client)(implicit e
   /**
     * @inheritdoc
     */
-  override def download(remote: RemoteDataFile, tempDirectory: Path): Future[File] = Future {
+  override def download(remote: RemoteDataFile): Future[File] = Future {
     val location   = remote.location
     blocking {
       val s3Object = client.getObject(location.bucket, location.key)
       val stream   = s3Object.getObjectContent
       try {
         assertChecksumMatch(s3Object, remote)
-        val local  = Files.createTempFile(tempDirectory, FilenameUtils.getBaseName(location.key), FilenameUtils.getExtension(location.key)).toFile
+        val local  = tempFiles.newFile(FilenameUtils.getBaseName(location.key), FilenameUtils.getExtension(location.key))
         FileUtils.copyInputStreamToFile(stream, local)
         local
       } finally {

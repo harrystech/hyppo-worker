@@ -6,14 +6,14 @@ import java.nio.file.Path
 import com.harrys.hyppo.source.api.model.DataIngestionTask
 import com.harrys.hyppo.worker.api.proto._
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Created by jpetty on 2/9/16.
   */
 trait DataFileHandler {
 
-  def download(remote: RemoteDataFile, tempDirectory: Path): Future[File]
+  def download(remote: RemoteDataFile): Future[File]
 
   def uploadRawData(task: DataIngestionTask, files: Seq[File]) : Future[Seq[RemoteRawDataFile]]
 
@@ -23,4 +23,10 @@ trait DataFileHandler {
 
   def remoteLogLocation(input: WorkerInput): RemoteStorageLocation
 
+}
+
+object DataFileHandler {
+  trait Factory {
+    def apply(tempFiles: TempFilePool)(implicit ec: ExecutionContext): DataFileHandler
+  }
 }

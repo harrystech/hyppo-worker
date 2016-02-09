@@ -1,24 +1,30 @@
 name := "worker"
 
-val AkkaVersion = "2.3.11"
+val AkkaVersion = "2.3.13"
+
+val GuiceVersion = "4.0"
+
+val Json4sVersion = "3.3.0"
 
 resolvers += "The New Motion Public Repo" at "http://nexus.thenewmotion.com/content/groups/public/"
 
 libraryDependencies ++= Seq(
-  "com.typesafe.akka" %% "akka-actor"  % AkkaVersion,     // Akka actors
+  "com.typesafe.akka" %% "akka-actor"  % AkkaVersion,         // Akka actors
   "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",  // scala logging API
   "joda-time"         %  "joda-time"       % "2.8.1",         // better date / time APIs
   "com.google.guava"  %   "guava"          % "18.0",          //  Caches / Other Utils
-  "org.json4s"        %% "json4s-jackson"  % "3.3.0",         // json4s - scala json interface wrapping jackson
-  "org.json4s"        %% "json4s-ext"      % "3.3.0",         // json4s <> joda-time extensions
+  "org.json4s"        %% "json4s-jackson"  % Json4sVersion,   // json4s - scala json interface wrapping jackson
+  "org.json4s"        %% "json4s-ext"      % Json4sVersion,   // json4s <> joda-time extensions
   "commons-io"        %  "commons-io"      % "2.4",           // Handy utils for IO stuff
   "ch.qos.logback"    %  "logback-classic" % "1.1.3",         // Logging API implementation
   "com.google.code.findbugs" % "jsr305" % "3.0.0",            // Compile time checks based on annotations
   "com.thenewmotion.akka" %% "akka-rabbitmq" % "1.2.4",       // RabbitMQ client for work negotiation
   "org.apache.httpcomponents" % "httpclient" % "4.5",         // HTTP client for RabbitMQ management API
   "com.amazonaws" %  "aws-java-sdk-s3" % "1.10.2",            // Reading / writing to S3
-  "com.google.inject" % "guice"         % "4.0",              // Dependency injection
-  "javax.inject"      % "javax.inject"  % "1"
+  "com.google.inject" % "guice"         % GuiceVersion,       // Dependency injection
+  "com.google.inject.extensions" % "guice-assistedinject" % GuiceVersion,
+  "javax.inject"      % "javax.inject"  % "1",
+  "com.sandinh" %% "akka-guice" % "3.1.1" excludeAll(ExclusionRule(organization = "com.typesafe.akka"))
 )
 
 mainClass in run := Some("com.harrys.hyppo.WorkerMain")

@@ -5,12 +5,11 @@ import java.util.UUID
 import akka.actor.ActorRef
 import akka.testkit.TestActorRef
 import akka.util.Timeout
-import com.harrys.hyppo.worker.actor.data.LocalJarLoadingActor
-import com.harrys.hyppo.worker.{BlockingProcessedDataStub, TestObjects, TestConfig}
-import com.harrys.hyppo.worker.actor.{WorkerFSM, RabbitMQTests}
 import com.harrys.hyppo.worker.actor.amqp.RabbitQueueStatusActor.QueueStatusUpdate
 import com.harrys.hyppo.worker.actor.amqp.SingleQueueDetails
-import com.harrys.hyppo.worker.api.proto.{RemoteStorageLocation, RemoteProcessedDataFile, PersistProcessedDataRequest, CreateIngestionTasksRequest}
+import com.harrys.hyppo.worker.actor.{RabbitMQTests, WorkerFSM}
+import com.harrys.hyppo.worker.api.proto.{PersistProcessedDataRequest, RemoteProcessedDataFile, RemoteStorageLocation}
+import com.harrys.hyppo.worker.{BlockingProcessedDataStub, TestConfig, TestObjects}
 import org.scalatest.concurrent.Eventually
 
 /**

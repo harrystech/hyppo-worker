@@ -7,7 +7,6 @@ import akka.testkit.TestActorRef
 import akka.util.Timeout
 import com.harrys.hyppo.worker.actor.amqp.RabbitQueueStatusActor.QueueStatusUpdate
 import com.harrys.hyppo.worker.actor.amqp.SingleQueueDetails
-import com.harrys.hyppo.worker.actor.data.LocalJarLoadingActor
 import com.harrys.hyppo.worker.actor.{RabbitMQTests, WorkerFSM}
 import com.harrys.hyppo.worker.api.proto.CreateIngestionTasksRequest
 import com.harrys.hyppo.worker.{BlockingProcessedDataStub, TestConfig, TestObjects}

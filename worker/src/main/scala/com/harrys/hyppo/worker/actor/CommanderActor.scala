@@ -7,6 +7,7 @@ import javax.inject.Inject
 
 import akka.actor.{Actor, ActorLogging, ActorRef}
 import com.google.inject.Injector
+import com.google.inject.assistedinject.Assisted
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.executor.cli.ExecutorMain
 import com.harrys.hyppo.executor.proto.com._
@@ -15,8 +16,11 @@ import com.harrys.hyppo.source.api.model.{DataIngestionJob, TaskAssociations}
 import com.harrys.hyppo.worker.actor.task.TaskFSMEvent
 import com.harrys.hyppo.worker.api.code.{IntegrationCode, IntegrationSchema}
 import com.harrys.hyppo.worker.api.proto._
-import com.harrys.hyppo.worker.data.{DataFileHandler, LoadedJarFile}
+import com.harrys.hyppo.worker.data.{TempFilePool, DataFileHandler, LoadedJarFile}
 import com.harrys.hyppo.worker.proc.{CommandExecutionException, CommandOutput, ExecutorException, SimpleCommander}
+import com.sandinh.akuice.ActorInject
+import org.apache.commons.io.FileUtils
+import org.apache.commons.io.filefilter.{TrueFileFilter, FileFilterUtils, IOFileFilter}
 
 import scala.collection.JavaConversions
 import scala.concurrent.Future
@@ -27,13 +31,12 @@ import scala.util.{Failure, Success, Try}
 /**
  * Created by jpetty on 10/29/15.
  */
-@Inject
-class CommanderActor
+class CommanderActor @Inject()
 (
-  config:       WorkerConfig,
-  integration:  IntegrationCode,
-  jarFiles:     Seq[LoadedJarFile],
-  injector:     Injector
+  config:                 WorkerConfig,
+  dataHandlerFactory:     DataFileHandler.Factory,
+  @Assisted integration:  IntegrationCode,
+  @Assisted jarFiles:     Seq[LoadedJarFile]
 ) extends Actor with ActorLogging {
 
   import context.dispatcher
@@ -54,8 +57,8 @@ class CommanderActor
     new SimpleCommander(executor, socket)
   }
 
-  val workingDir  = simpleCommander.executor.files.workingDirectory.toPath
-  val dataHandler = injector.getInstance(classOf[DataFileHandler])
+  val tempFiles   = new TempFilePool(simpleCommander.executor.files.workingDirectory.toPath)
+  val dataHandler = dataHandlerFactory(tempFiles)
 
   //  Easier access to executor STDOUT / STDERR streams on disk
   def standardErrorContents: String = Source.fromFile(simpleCommander.executor.files.standardErrorFile).mkString
@@ -81,6 +84,7 @@ class CommanderActor
       } else {
         isRunningWork = false
         simpleCommander.executor.files.cleanupLogs()
+        tempFiles.cleanAll()
         log.debug("Commander is now available")
       }
 
@@ -215,8 +219,7 @@ class CommanderActor
 
 
   def performRawDataProcessing(taskActor: ActorRef, input: ProcessRawDataRequest) : Future[Unit] = {
-    val rawDownloads = input.files.map(file => dataHandler.download(file, workingDir))
-    val filesFuture  = handleDownloadFailure(taskActor, input, Future.sequence(rawDownloads))
+    val filesFuture  = handleDownloadFailure(taskActor, input, Future.sequence(input.files.map(dataHandler.download)))
     val outputFuture = filesFuture.map { files =>
       taskActor ! TaskFSMEvent.OperationStarting
       simpleCommander.executeCommand(new ProcessRawDataCommand(input.task, JavaConversions.seqAsJavaList(files)))
@@ -234,7 +237,7 @@ class CommanderActor
   }
 
   def performProcessedDataPersisting(taskActor: ActorRef, input: PersistProcessedDataRequest) : Future[Unit] = {
-    val fileFuture   = handleDownloadFailure(taskActor, input, dataHandler.download(input.data, workingDir))
+    val fileFuture   = handleDownloadFailure(taskActor, input, dataHandler.download(input.data))
     val outputFuture = fileFuture.map { data =>
       taskActor ! TaskFSMEvent.OperationStarting
       simpleCommander.executeCommand(new PersistProcessedDataCommand(input.task, data))
@@ -320,5 +323,11 @@ class CommanderActor
     if (integration.jarFiles != codeKeys){
       throw new IllegalStateException(s"Commander received jar file mismatch for $integration with jars: ${ codeKeys.mkString(", ") }")
     }
+  }
+}
+
+object CommanderActor {
+  trait Factory {
+    def apply(integration: IntegrationCode, jarFiles: Seq[LoadedJarFile]): Actor
   }
 }

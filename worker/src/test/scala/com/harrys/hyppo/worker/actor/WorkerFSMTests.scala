@@ -3,7 +3,6 @@ package com.harrys.hyppo.worker.actor
 import akka.testkit._
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.TestConfig
-import com.harrys.hyppo.worker.actor.data.LocalJarLoadingActor
 
 
 /**

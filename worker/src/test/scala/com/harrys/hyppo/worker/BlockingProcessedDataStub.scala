@@ -5,8 +5,6 @@ import java.time.Duration
 import com.harrys.hyppo.source.api.PersistingSemantics
 import com.harrys.hyppo.source.api.task._
 import com.harrys.hyppo.worker.rt.data.TestRecord
-import com.typesafe.scalalogging.Logger
-import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions
 
