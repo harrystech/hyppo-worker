@@ -82,7 +82,7 @@ final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging
   }
 
   @tailrec
-  def createExecutionItem(channel: Channel, worker: ActorRef, queues: List[String]) : Option[WorkQueueExecution] = {
+  def createExecutionItem(channel: Channel, worker: ActorRef, queues: List[String]): Option[WorkQueueExecution] = {
     if (queues.isEmpty){
       None
     } else {
@@ -118,7 +118,7 @@ final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging
     }
   }
 
-  def nonEmptyIntegrationQueueGroups() : Seq[QueueDetails] = {
+  def nonEmptyIntegrationQueueGroups(): Seq[QueueDetails] = {
     val integrations = currentStats.values.filter(info => {
       naming.isIntegrationQueueName(info.queueName)
     })
@@ -129,7 +129,7 @@ final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging
     }
   }
 
-  def dequeueWithoutAck(channel: Channel, queueName: String) : Option[WorkQueueItem] = {
+  def dequeueWithoutAck(channel: Channel, queueName: String): Option[WorkQueueItem] = {
     val response = channel.basicGet(queueName, false)
     if (response == null){
       self ! RabbitQueueStatusActor.PartialStatusUpdate(queueName, 0)

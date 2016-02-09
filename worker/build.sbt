@@ -16,8 +16,9 @@ libraryDependencies ++= Seq(
   "com.google.code.findbugs" % "jsr305" % "3.0.0",            // Compile time checks based on annotations
   "com.thenewmotion.akka" %% "akka-rabbitmq" % "1.2.4",       // RabbitMQ client for work negotiation
   "org.apache.httpcomponents" % "httpclient" % "4.5",         // HTTP client for RabbitMQ management API
-  "javax.inject" % "javax.inject" % "1",
-  "com.amazonaws" %  "aws-java-sdk-s3" % "1.10.2"         // Reading / writing to S3
+  "com.amazonaws" %  "aws-java-sdk-s3" % "1.10.2",            // Reading / writing to S3
+  "com.google.inject" % "guice"         % "4.0",              // Dependency injection
+  "javax.inject"      % "javax.inject"  % "1"
 )
 
 mainClass in run := Some("com.harrys.hyppo.WorkerMain")

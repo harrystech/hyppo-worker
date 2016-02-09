@@ -3,8 +3,10 @@ package com.harrys.hyppo.worker.actor
 import java.io.File
 import java.net.{InetAddress, ServerSocket}
 import java.util.concurrent.TimeoutException
+import javax.inject.Inject
 
 import akka.actor.{Actor, ActorLogging, ActorRef}
+import com.google.inject.Injector
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.executor.cli.ExecutorMain
 import com.harrys.hyppo.executor.proto.com._
@@ -13,7 +15,7 @@ import com.harrys.hyppo.source.api.model.{DataIngestionJob, TaskAssociations}
 import com.harrys.hyppo.worker.actor.task.TaskFSMEvent
 import com.harrys.hyppo.worker.api.code.{IntegrationCode, IntegrationSchema}
 import com.harrys.hyppo.worker.api.proto._
-import com.harrys.hyppo.worker.data.{DataHandler, LoadedJarFile, TempFilePool}
+import com.harrys.hyppo.worker.data.{DataFileHandler, LoadedJarFile}
 import com.harrys.hyppo.worker.proc.{CommandExecutionException, CommandOutput, ExecutorException, SimpleCommander}
 
 import scala.collection.JavaConversions
@@ -25,11 +27,13 @@ import scala.util.{Failure, Success, Try}
 /**
  * Created by jpetty on 10/29/15.
  */
+@Inject
 class CommanderActor
 (
   config:       WorkerConfig,
   integration:  IntegrationCode,
-  jarFiles:     Seq[LoadedJarFile]
+  jarFiles:     Seq[LoadedJarFile],
+  injector:     Injector
 ) extends Actor with ActorLogging {
 
   import context.dispatcher
@@ -50,8 +54,8 @@ class CommanderActor
     new SimpleCommander(executor, socket)
   }
 
-  val tempFiles   = new TempFilePool(simpleCommander.executor.files.workingDirectory.toPath)
-  val dataHandler = new DataHandler(config, tempFiles)
+  val workingDir  = simpleCommander.executor.files.workingDirectory.toPath
+  val dataHandler = injector.getInstance(classOf[DataFileHandler])
 
   //  Easier access to executor STDOUT / STDERR streams on disk
   def standardErrorContents: String = Source.fromFile(simpleCommander.executor.files.standardErrorFile).mkString
@@ -211,7 +215,8 @@ class CommanderActor
 
 
   def performRawDataProcessing(taskActor: ActorRef, input: ProcessRawDataRequest) : Future[Unit] = {
-    val filesFuture  = handleDownloadFailure(taskActor, input, Future.sequence(input.files.map(dataHandler.download)))
+    val rawDownloads = input.files.map(file => dataHandler.download(file, workingDir))
+    val filesFuture  = handleDownloadFailure(taskActor, input, Future.sequence(rawDownloads))
     val outputFuture = filesFuture.map { files =>
       taskActor ! TaskFSMEvent.OperationStarting
       simpleCommander.executeCommand(new ProcessRawDataCommand(input.task, JavaConversions.seqAsJavaList(files)))
@@ -229,7 +234,7 @@ class CommanderActor
   }
 
   def performProcessedDataPersisting(taskActor: ActorRef, input: PersistProcessedDataRequest) : Future[Unit] = {
-    val fileFuture   = handleDownloadFailure(taskActor, input, dataHandler.download(input.data))
+    val fileFuture   = handleDownloadFailure(taskActor, input, dataHandler.download(input.data, workingDir))
     val outputFuture = fileFuture.map { data =>
       taskActor ! TaskFSMEvent.OperationStarting
       simpleCommander.executeCommand(new PersistProcessedDataCommand(input.task, data))

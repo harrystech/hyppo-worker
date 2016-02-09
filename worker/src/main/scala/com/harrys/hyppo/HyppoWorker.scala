@@ -2,7 +2,8 @@ package com.harrys.hyppo
 
 import akka.actor._
 import akka.pattern.gracefulStop
-import com.harrys.hyppo.config.WorkerConfig
+import com.google.inject.Guice
+import com.harrys.hyppo.config.{HyppoWorkerModule, WorkerConfig}
 import com.harrys.hyppo.util.ConfigUtils
 import com.harrys.hyppo.worker.actor.WorkerFSM
 import com.harrys.hyppo.worker.actor.amqp.RabbitQueueStatusActor
@@ -20,6 +21,8 @@ import scala.concurrent.{Await, Future}
 final class HyppoWorker(val system: ActorSystem, val settings: WorkerConfig) {
 
   def this(system: ActorSystem, config: Config) = this(system, new WorkerConfig(config))
+
+  val injector   = Guice.createInjector(new HyppoWorkerModule(settings, system))
 
   //  Kick off baseline queue creation
   HyppoCoordinator.initializeBaseQueues(settings)

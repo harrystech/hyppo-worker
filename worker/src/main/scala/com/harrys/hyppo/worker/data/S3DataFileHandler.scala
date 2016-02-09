@@ -1,6 +1,8 @@
 package com.harrys.hyppo.worker.data
 
 import java.io.File
+import java.nio.file.{Path, Files}
+import javax.inject.Inject
 
 import com.amazonaws.services.s3.AmazonS3Client
 import com.amazonaws.services.s3.model.{PutObjectResult, S3Object}
@@ -9,41 +11,37 @@ import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.source.api.model.DataIngestionTask
 import com.harrys.hyppo.worker.api.code.IntegrationUtils
 import com.harrys.hyppo.worker.api.proto._
-import org.apache.commons.io.{FileUtils, FilenameUtils, IOUtils}
-import org.joda.time.format.ISODateTimeFormat
+import org.apache.commons.io.{IOUtils, FilenameUtils, FileUtils}
 import org.joda.time.{DateTimeZone, LocalDate}
+import org.joda.time.format.ISODateTimeFormat
 
 import scala.concurrent._
 
 /**
- * Created by jpetty on 8/4/15.
- */
-final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val context: ExecutionContext) {
+  * Created by jpetty on 2/9/16.
+  */
+@Inject
+class S3DataFileHandler(config: WorkerConfig, client: AmazonS3Client)(implicit ec: ExecutionContext) extends DataFileHandler {
+  private val LocalDateFormat = ISODateTimeFormat.date()
 
-  private val client = new AmazonS3Client(config.awsCredentialsProvider)
-
-  def remoteLogLocation(input: WorkerInput): RemoteStorageLocation = {
+  /**
+    * @inheritdoc
+    */
+  override def remoteLogLocation(input: WorkerInput): RemoteStorageLocation = {
     RemoteStorageLocation(config.dataBucketName, remoteLogKey(input))
   }
 
-  def uploadLogFile(input: WorkerInput, log: File): Future[RemoteLogFile] = {
-    uploadLogFile(remoteLogLocation(input), log)
-  }
-
-  def uploadLogFile(location: RemoteStorageLocation, log: File): Future[RemoteLogFile] = Future {
-    val fileSize = FileUtils.sizeOf(log)
-    val result   = client.putObject(location.bucket, location.key, log)
-    RemoteLogFile(location, fileSize, fingerprintValue(result, log))
-  }
-
-  def download(remote: RemoteDataFile): Future[File] = Future {
+  /**
+    * @inheritdoc
+    */
+  override def download(remote: RemoteDataFile, tempDirectory: Path): Future[File] = Future {
     val location   = remote.location
     blocking {
       val s3Object = client.getObject(location.bucket, location.key)
       val stream   = s3Object.getObjectContent
       try {
         assertChecksumMatch(s3Object, remote)
-        val local  = files.newFile(FilenameUtils.getBaseName(location.key), FilenameUtils.getExtension(location.key))
+        val local  = Files.createTempFile(tempDirectory, FilenameUtils.getBaseName(location.key), FilenameUtils.getExtension(location.key)).toFile
         FileUtils.copyInputStreamToFile(stream, local)
         local
       } finally {
@@ -52,7 +50,22 @@ final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val 
     }
   }
 
-  def uploadRawData(task: DataIngestionTask, files: Seq[File]) : Future[Seq[RemoteRawDataFile]] = {
+  /**
+    * @inheritdoc
+    */
+  override def uploadProcessedData(task: DataIngestionTask, file: File, records: Long): Future[RemoteProcessedDataFile] = Future {
+    val location = remoteProcessedDataFileLocation(task, file)
+    blocking {
+      val fileSize = FileUtils.sizeOf(file)
+      val response = client.putObject(location.bucket, location.key, file)
+      RemoteProcessedDataFile(location, fileSize, fingerprintValue(response, file), records)
+    }
+  }
+
+  /**
+    * @inheritdoc
+    */
+  override def uploadRawData(task: DataIngestionTask, files: Seq[File]): Future[Seq[RemoteRawDataFile]] = {
     val filePairs = remoteRawDataFileLocations(task, files)
     val futures   = filePairs.map(pair => Future {
       val location  = pair._1
@@ -66,13 +79,14 @@ final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val 
     Future.sequence(futures)
   }
 
-  def uploadProcessedData(task: DataIngestionTask, file: File, records: Long) : Future[RemoteProcessedDataFile] = Future {
-    val location = remoteProcessedDataFileLocation(task, file)
-    blocking {
-      val fileSize = FileUtils.sizeOf(file)
-      val response = client.putObject(location.bucket, location.key, file)
-      RemoteProcessedDataFile(location, fileSize, fingerprintValue(response, file), records)
-    }
+  /**
+    * @inheritdoc
+    */
+  override def uploadLogFile(input: WorkerInput, log: File): Future[RemoteLogFile] = Future {
+    val location = RemoteStorageLocation(config.dataBucketName, remoteLogKey(input))
+    val fileSize = FileUtils.sizeOf(log)
+    val result   = client.putObject(location.bucket, location.key, log)
+    RemoteLogFile(location, fileSize, fingerprintValue(result, log))
   }
 
   private def remoteRawDataFileLocations(task: DataIngestionTask, files: Seq[File]) : Seq[(RemoteStorageLocation, File)] = {
@@ -89,8 +103,6 @@ final class DataHandler(config: WorkerConfig, files: TempFilePool)(implicit val 
     val specificKey = Seq(processedDataFileRoot(task), "data.avro").mkString("/")
     RemoteStorageLocation(config.dataBucketName, specificKey)
   }
-
-  private val LocalDateFormat = ISODateTimeFormat.date()
 
   private def rawDataFileRoot(task: DataIngestionTask) : String = {
     val job    = task.getIngestionJob
