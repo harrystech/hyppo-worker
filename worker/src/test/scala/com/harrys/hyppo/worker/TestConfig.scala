@@ -2,8 +2,10 @@ package com.harrys.hyppo.worker
 
 import java.io.File
 
+import akka.actor.ActorSystem
+import com.google.inject.{Guice, Injector}
 import com.harrys.hyppo.HyppoWorker
-import com.harrys.hyppo.config.{CoordinatorConfig, WorkerConfig}
+import com.harrys.hyppo.config.{HyppoCoordinatorModule, HyppoWorkerModule, CoordinatorConfig, WorkerConfig}
 import com.harrys.hyppo.util.ConfigUtils
 import com.typesafe.config.{Config, ConfigValueFactory}
 
@@ -51,5 +53,15 @@ object TestConfig {
     val config = new WorkerConfig(basicTestWithQueuePrefix(random))
     assert(config.workQueuePrefix == random)
     config
+  }
+
+  def localWorkerInjector(system: ActorSystem, config: WorkerConfig): Injector = {
+    val module = new WorkerLocalTestModule(system, config)
+    Guice.createInjector(module)
+  }
+
+  def localCoordinatorInjector(system: ActorSystem, config: CoordinatorConfig): Injector = {
+    val module = new HyppoCoordinatorModule(system, config)
+    Guice.createInjector(module)
   }
 }

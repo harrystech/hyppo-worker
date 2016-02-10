@@ -3,12 +3,14 @@ package com.harrys.hyppo.worker.actor
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestActorRef, TestKit}
 import akka.util.Timeout
-import com.harrys.hyppo.config.HyppoConfig
+import com.harrys.hyppo.config.{WorkerConfig, HyppoConfig}
 import com.harrys.hyppo.util.TimeUtils
+import com.harrys.hyppo.worker.TestConfig
 import com.harrys.hyppo.worker.actor.amqp.{AMQPMessageProperties, AMQPSerialization, QueueHelpers, QueueNaming}
 import com.harrys.hyppo.worker.actor.queue.{QueueItemHeaders, ResourceLeasing, WorkQueueExecution}
 import com.harrys.hyppo.worker.api.proto._
 import com.rabbitmq.client.{Channel, Connection, ConnectionFactory}
+import com.sandinh.akuice.ActorInject
 import com.thenewmotion.akka.rabbitmq.ConnectionActor
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
@@ -18,7 +20,12 @@ import scala.util.Try
 /**
  * Created by jpetty on 9/16/15.
  */
-abstract class RabbitMQTests[T <: HyppoConfig](systemName: String, final val config: T) extends TestKit(ActorSystem(systemName, config.underlying)) with WordSpecLike with BeforeAndAfterAll with Matchers with ImplicitSender {
+abstract class RabbitMQTests[T <: HyppoConfig](systemName: String, final val config: T)
+  extends TestKit(ActorSystem(systemName, config.underlying))
+    with WordSpecLike
+    with BeforeAndAfterAll
+    with Matchers
+    with ImplicitSender {
 
   override final def afterAll() : Unit = {
     try {
@@ -39,8 +46,8 @@ abstract class RabbitMQTests[T <: HyppoConfig](systemName: String, final val con
 
   def localTestCleanup() : Unit = {}
 
-  final val connection      = config.rabbitMQConnectionFactory.newConnection()
-  final val connectionActor = TestActorRef(ConnectionActor.props(new ConnectionFactory {
+  final val connection        = config.rabbitMQConnectionFactory.newConnection()
+  final val connectionActor   = TestActorRef(ConnectionActor.props(new ConnectionFactory {
     override def newConnection() : Connection = connection
   }))
 

@@ -35,8 +35,8 @@ class CommanderActor @Inject()
 (
   config:                 WorkerConfig,
   dataHandlerFactory:     DataFileHandler.Factory,
-  @Assisted integration:  IntegrationCode,
-  @Assisted jarFiles:     Seq[LoadedJarFile]
+  @Assisted("integration") integration:  IntegrationCode,
+  @Assisted("jarFiles")    jarFiles:     Seq[LoadedJarFile]
 ) extends Actor with ActorLogging {
 
   import context.dispatcher
@@ -328,6 +328,6 @@ class CommanderActor @Inject()
 
 object CommanderActor {
   trait Factory {
-    def apply(integration: IntegrationCode, jarFiles: Seq[LoadedJarFile]): Actor
+    def apply(@Assisted("integration") integration: IntegrationCode, @Assisted("jarFiles") jarFiles: Seq[LoadedJarFile]): CommanderActor
   }
 }

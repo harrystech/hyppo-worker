@@ -13,8 +13,7 @@ class WorkerFSMTests extends WorkerActorTests(new WorkerConfig(TestConfig.basicT
   override def localTestCleanup() : Unit = {}
 
   "The WorkerFSM" must {
-    val jarLoader = TestActorRef(new LocalJarLoadingActor())
-    val workerFSM = TestFSMRef(new WorkerFSM(config, self, connectionActor, jarLoader))
+    val workerFSM = TestFSMRef(workerFSMFactory(delegator = self, connection = connectionActor))
 
     "start in the idle state" in {
       workerFSM.stateName shouldEqual WorkerFSM.Idle

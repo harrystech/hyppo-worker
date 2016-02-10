@@ -5,6 +5,7 @@ import java.nio.file.Files
 import javax.inject.Inject
 
 import com.amazonaws.services.s3.AmazonS3Client
+import com.google.inject.assistedinject.Assisted
 import com.harrys.hyppo.worker.api.proto.RemoteStorageLocation
 import org.apache.commons.io.{FileUtils, FileCleaningTracker, IOUtils, FilenameUtils}
 
@@ -13,8 +14,8 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * Created by jpetty on 2/9/16.
   */
-@Inject
-class S3JarFileLoader(client: AmazonS3Client)(implicit val ec: ExecutionContext) extends JarFileLoader {
+
+class S3JarFileLoader @Inject() (client: AmazonS3Client)(implicit @Assisted ec: ExecutionContext) extends JarFileLoader {
   private val tracker = new FileCleaningTracker()
 
   override def shutdown(): Unit = {

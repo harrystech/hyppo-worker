@@ -10,8 +10,11 @@ import com.harrys.hyppo.worker.actor.RabbitMQTests
  */
 class QueueStatusUpdateActorTests extends RabbitMQTests("QueueStatusUpdateActorTests", TestConfig.workerWithRandomQueuePrefix()) {
 
+  val injector = TestConfig.localWorkerInjector(system, config)
+
   "The QueueStatusActor" must {
-    val status = TestActorRef(new RabbitQueueStatusActor(config, self))
+    val factory = injector.getInstance(classOf[RabbitQueueStatusActor.Factory])
+    val status  = TestActorRef(factory(self), "queue-status")
 
     "schedule a timer to refresh queue information" in {
       status.underlyingActor.statusTimer.isCancelled shouldBe false

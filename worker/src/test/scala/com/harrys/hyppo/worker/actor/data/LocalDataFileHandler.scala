@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.file.Files
 import javax.inject.Inject
 
+import com.google.inject.assistedinject.Assisted
 import com.harrys.hyppo.source.api.model.DataIngestionTask
 import com.harrys.hyppo.worker.api.code.IntegrationUtils
 import com.harrys.hyppo.worker.api.proto._
@@ -15,7 +16,7 @@ import scala.concurrent._
 /**
   * Created by jpetty on 2/9/16.
   */
-class LocalDataFileHandler @Inject() (implicit ec: ExecutionContext) extends DataFileHandler {
+class LocalDataFileHandler @Inject() (implicit @Assisted ec: ExecutionContext) extends DataFileHandler {
 
   val tempDirectory = Files.createTempDirectory("test")
   Runtime.getRuntime.addShutdownHook(new Thread(new Runnable(){

@@ -1,7 +1,7 @@
 package com.harrys.hyppo.config
 
 import com.harrys.hyppo.worker.exec.{AvroFileCodec, ExecutorSetup, TaskLogStrategy}
-import com.typesafe.config.Config
+import com.typesafe.config.{ConfigValueFactory, ConfigValue, Config}
 
 import scala.collection.JavaConversions
 import scala.concurrent.duration._
@@ -45,8 +45,25 @@ final class WorkerConfig(config: Config) extends HyppoConfig(config) {
 
   val uploadLogTimeout: FiniteDuration = Duration(config.getDuration("hyppo.worker.upload-log-timeout").toMillis, MILLISECONDS)
 
-
-
   def newExecutorSetup(): ExecutorSetup = defaultSetup.clone()
 
+  def withValue(path: String, value: ConfigValue): WorkerConfig = {
+    new WorkerConfig(underlying.withValue(path, value))
+  }
+
+  def withValue(path: String, value: String): WorkerConfig = {
+    withValue(path, ConfigValueFactory.fromAnyRef(value))
+  }
+
+  def withValue(path: String, value: Int): WorkerConfig = {
+    withValue(path, ConfigValueFactory.fromAnyRef(value.asInstanceOf[java.lang.Integer]))
+  }
+
+  def withValue(path: String, value: Boolean): WorkerConfig = {
+    withValue(path, ConfigValueFactory.fromAnyRef(value.asInstanceOf[java.lang.Boolean]))
+  }
+
+  def withValue(path: String, value: Double): WorkerConfig = {
+    withValue(path, ConfigValueFactory.fromAnyRef(value.asInstanceOf[java.lang.Double]))
+  }
 }

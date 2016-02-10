@@ -21,8 +21,8 @@ import scala.util.Try
 final class TaskFSM @Inject()
 (
   config:               WorkerConfig,
-  @Assisted execution:  WorkQueueExecution,
-  @Assisted commander:  ActorRef
+  @Assisted("execution") execution:  WorkQueueExecution,
+  @Assisted("commander") commander:  ActorRef
 ) extends FSM[TaskFSMStatus, Unit] with ActorLogging {
 
   private val serialization = new AMQPSerialization(config.secretKey)
@@ -168,6 +168,6 @@ final class TaskFSM @Inject()
 
 object TaskFSM {
   trait Factory {
-    def apply(execution: WorkQueueExecution, commander: ActorRef): Actor
+    def apply(@Assisted("execution") execution: WorkQueueExecution, @Assisted("commander") commander: ActorRef): TaskFSM
   }
 }

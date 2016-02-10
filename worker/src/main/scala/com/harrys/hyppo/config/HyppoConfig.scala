@@ -6,7 +6,7 @@ import com.amazonaws.auth.{AWSCredentialsProvider, BasicAWSCredentials, DefaultA
 import com.amazonaws.internal.StaticCredentialsProvider
 import com.harrys.hyppo.worker.actor.amqp.{AMQPEncryption, QueueNaming, RabbitHttpClient}
 import com.rabbitmq.client.ConnectionFactory
-import com.typesafe.config.Config
+import com.typesafe.config.{ConfigValue, Config}
 
 import scala.concurrent.duration._
 

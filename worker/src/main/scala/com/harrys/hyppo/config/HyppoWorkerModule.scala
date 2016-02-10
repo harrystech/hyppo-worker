@@ -4,7 +4,7 @@ import akka.actor.ActorSystem
 import com.amazonaws.services.s3.AmazonS3Client
 import com.google.inject.assistedinject.FactoryModuleBuilder
 import com.google.inject.{Provides, Guice, Injector, AbstractModule}
-import com.harrys.hyppo.worker.actor.amqp.{QueueHelpers, QueueNaming, RabbitHttpClient}
+import com.harrys.hyppo.worker.actor.amqp.{RabbitQueueStatusActor, QueueHelpers, QueueNaming, RabbitHttpClient}
 import com.harrys.hyppo.worker.actor.{WorkerFSM, CommanderActor}
 import com.harrys.hyppo.worker.actor.task.TaskFSM
 import com.harrys.hyppo.worker.data.{S3JarFileLoader, S3DataFileHandler, DataFileHandler, JarFileLoader}
@@ -15,13 +15,11 @@ import scala.concurrent.{ExecutionContextExecutor, ExecutionContext}
 /**
   * Created by jpetty on 2/9/16.
   */
-class HyppoWorkerModule(val config: WorkerConfig, val system: ActorSystem) extends AbstractModule with AkkaGuiceSupport {
+class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) extends AbstractModule with AkkaGuiceSupport {
 
-  override def configure(): Unit = {
+  override final def configure(): Unit = {
     bind(classOf[WorkerConfig]).toInstance(config)
     bind(classOf[ActorSystem]).toInstance(system)
-    bind(classOf[ExecutionContext]).toInstance(system.dispatcher)
-    bind(classOf[ExecutionContextExecutor]).toInstance(system.dispatcher)
     //  Opportunity for overrides
     bindJarFileHandler()
     bindDataFileHandler()
@@ -29,10 +27,14 @@ class HyppoWorkerModule(val config: WorkerConfig, val system: ActorSystem) exten
     bindActorFactory[CommanderActor, CommanderActor.Factory]
     bindActorFactory[TaskFSM, TaskFSM.Factory]
     bindActorFactory[WorkerFSM, WorkerFSM.Factory]
+    bindActorFactory[RabbitQueueStatusActor, RabbitQueueStatusActor.Factory]
   }
 
   protected def bindJarFileHandler(): Unit = {
-    bind(classOf[JarFileLoader]).to(classOf[S3JarFileLoader])
+    val module = new FactoryModuleBuilder()
+      .implement(classOf[JarFileLoader], classOf[S3JarFileLoader])
+      .build(classOf[JarFileLoader.Factory])
+    install(module)
   }
 
   protected def bindDataFileHandler(): Unit = {

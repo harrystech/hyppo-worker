@@ -1,12 +1,16 @@
 package com.harrys.hyppo.worker.actor.queue
 
+import javax.inject.Inject
+
 import akka.actor._
+import com.google.inject.{Injector, Provider}
 import com.harrys.hyppo.Lifecycle
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.util.TimeUtils
 import com.harrys.hyppo.worker.actor.amqp._
 import com.harrys.hyppo.worker.actor.{RequestForAnyWork, RequestForPreferredWork, RequestForWork}
 import com.harrys.hyppo.worker.api.proto.WorkerInput
+import com.sandinh.akuice.ActorInject
 import com.thenewmotion.akka.rabbitmq._
 
 import scala.annotation.tailrec
@@ -15,14 +19,25 @@ import scala.util.Random
 /**
   * Created by jpetty on 11/6/15.
   */
-final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging {
+final class WorkDelegation @Inject()
+(
+  injectorProvider: Provider[Injector],
+  config:   WorkerConfig,
+  naming:   QueueNaming,
+  helpers:  QueueHelpers,
+  statusFactory: RabbitQueueStatusActor.Factory
+) extends Actor with ActorLogging with ActorInject {
+
+  override def injector: Injector = injectorProvider.get()
+
   //  Helper objects for dealing with queues
   val serializer    = new AMQPSerialization(config.secretKey)
-  val naming        = new QueueNaming(config)
-  val helpers       = new QueueHelpers(config, naming)
   val resources     = new ResourceLeasing
   //  The current known information about the queues, updated via assignment once fetched
   var currentStats  = Map[String, SingleQueueDetails]()
+
+  //  Actor that sends status update events
+  val statusActor   = injectActor(statusFactory(self), "queue-status")
 
 
   def shutdownImminent: Receive = {
@@ -62,6 +77,7 @@ final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging
 
     case Lifecycle.ImpendingShutdown =>
       log.info("Shutdown is imminent. Ceasing work delegation")
+      context.stop(statusActor)
       context.become(shutdownImminent, discardOld = false)
   }
 

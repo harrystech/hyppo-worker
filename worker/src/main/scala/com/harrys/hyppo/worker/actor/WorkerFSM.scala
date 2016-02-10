@@ -5,9 +5,8 @@ import javax.inject.Inject
 import akka.actor._
 import akka.pattern.gracefulStop
 import akka.util.Timeout
-import com.google.inject.Injector
+import com.google.inject.{Provider, Injector}
 import com.google.inject.assistedinject.Assisted
-import com.google.inject.name.Named
 import com.harrys.hyppo.Lifecycle
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.actor.WorkerFSM._
@@ -31,13 +30,15 @@ import scala.util.Failure
  */
 final class WorkerFSM @Inject()
 (
-  override val injector:  Injector,
+  injectorProvider:       Provider[Injector],
   config:                 WorkerConfig,
   commanderFactory:       CommanderActor.Factory,
   taskFSMFactory:         TaskFSM.Factory,
   @Assisted("delegator")  delegator:    ActorRef,
   @Assisted("connection") connection:   ActorRef
 ) extends LoggingFSM[WorkerState, CommanderState] with ActorInject {
+
+  override protected def injector: Injector = injectorProvider.get()
 
   val jarLoadingActor = injectActor[JarLoadingActor]("jar-loader")
 

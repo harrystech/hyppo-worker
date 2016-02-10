@@ -26,14 +26,12 @@ final class HyppoWorker private(val system: ActorSystem, val settings: WorkerCon
 
   val connection = system.actorOf(ConnectionActor.props(settings.rabbitMQConnectionFactory, reconnectionDelay = settings.rabbitMQTimeout), name = "rabbitmq")
 
-  val delegation = system.actorOf(Props(classOf[WorkDelegation], settings), "delegation")
-  val queueStats = system.actorOf(Props(classOf[RabbitQueueStatusActor], settings, delegation), "queue-stats")
+  val delegation = createDelegationActor()
   val workerFSMs = (1 to settings.workerCount).inclusive.map(i => createWorker(i))
 
 
   system.registerOnTermination({
     delegation ! Lifecycle.ImpendingShutdown
-    queueStats ! PoisonPill
     val workerWait  = FiniteDuration(settings.shutdownTimeout.mul(0.8).toMillis, MILLISECONDS)
     val futures     = workerFSMs.map(ref => gracefulStop(ref, workerWait, Lifecycle.ImpendingShutdown))
     implicit val ec = system.dispatcher
@@ -41,6 +39,11 @@ final class HyppoWorker private(val system: ActorSystem, val settings: WorkerCon
   })
 
   def awaitSystemTermination() : Unit = system.awaitTermination()
+
+  def createDelegationActor(): ActorRef = {
+    implicit val topLevel = system
+    injectActor(injector.getInstance(classOf[WorkDelegation]), "delegation")
+  }
 
   def createWorker(number: Int): ActorRef = {
     implicit val topLevel = system
@@ -57,11 +60,11 @@ object HyppoWorker {
   }
 
   def apply(system: ActorSystem, config: WorkerConfig): HyppoWorker = {
-    apply(system, config, Guice.createInjector(), new HyppoWorkerModule(config, system))
+    apply(system, config, Guice.createInjector(), new HyppoWorkerModule(system, config))
   }
 
   def apply(system: ActorSystem, config: WorkerConfig, injector: Injector): HyppoWorker = {
-    apply(system, config, injector, new HyppoWorkerModule(config, system))
+    apply(system, config, injector, new HyppoWorkerModule(system, config))
   }
 
   def apply[M <: HyppoWorkerModule](system: ActorSystem, config: WorkerConfig, module: M): HyppoWorker = {

@@ -18,6 +18,9 @@ import org.scalatest.concurrent.Eventually
 class IdempotentWorkQueueingTests extends RabbitMQTests("IdempotentWorkQueueingTests", TestConfig.workerWithRandomQueuePrefix()) with Eventually {
   import com.thenewmotion.akka.rabbitmq._
 
+
+  val injector          = TestConfig.localWorkerInjector(system, config)
+  val workerFSMFactory  = injector.getInstance(classOf[WorkerFSM.Factory])
   val rabbitHttp   = config.newRabbitMQApiClient()
   val channelActor = createChannelActor()
 
@@ -27,10 +30,9 @@ class IdempotentWorkQueueingTests extends RabbitMQTests("IdempotentWorkQueueingT
       val work         = createIdempotentWork()
       val queueName    = enqueueWork(work)
 
-      val delegationActor = TestActorRef(new WorkDelegation(config))
+      val delegationActor = TestActorRef(injector.getInstance(classOf[WorkDelegation]), "delegation")
       //  Create the WorkerFSM but disable the timer
-      val jarLoading      = TestActorRef(new LocalJarLoadingActor())
-      val workerFSMActor  = TestActorRef(new WorkerFSM(config, delegationActor, connectionActor, jarLoading))
+      val workerFSMActor  = TestActorRef(workerFSMFactory(delegator = delegationActor, connection = connectionActor))
       workerFSMActor.underlyingActor.cancelTimer(WorkerFSM.PollingTimerName)
 
       "find the pending work" in {

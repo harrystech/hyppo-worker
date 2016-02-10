@@ -18,9 +18,11 @@ import scala.util.Try
 class WorkerDelegatorActorTests extends RabbitMQTests("WorkerDelegatorActorTests", TestConfig.workerWithRandomQueuePrefix())  {
   import com.thenewmotion.akka.rabbitmq._
 
+  val injector = TestConfig.localWorkerInjector(system, config)
+
   "The WorkDelegator" must {
 
-    val delegator  = TestActorRef(new WorkDelegation(config))
+    val delegator  = TestActorRef(injector.getInstance(classOf[WorkDelegation]), "delegation")
 
     "initialize with empty queue status information" in {
       delegator.underlyingActor.currentStats shouldBe empty

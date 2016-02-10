@@ -8,10 +8,12 @@ import com.harrys.hyppo.worker.api.proto.RemoteStorageLocation
 
 import scala.concurrent.Future
 
-final class JarLoadingActor @Inject() (loader: JarFileLoader) extends Actor with ActorLogging {
+final class JarLoadingActor @Inject() (factory: JarFileLoader.Factory) extends Actor with ActorLogging {
   import JarLoadingActor._
   //  Load the dispatcher as the default execution context
   import context.dispatcher
+
+  val loader = factory(context.dispatcher)
 
   override def postStop(): Unit = {
     loader.shutdown()
