@@ -22,7 +22,7 @@ import scala.concurrent._
   * Created by jpetty on 2/9/16.
   */
 
-class S3DataFileHandler @Inject()
+final class S3DataFileHandler @Inject()
 (
   config:              WorkerConfig,
   client:              AmazonS3Client,

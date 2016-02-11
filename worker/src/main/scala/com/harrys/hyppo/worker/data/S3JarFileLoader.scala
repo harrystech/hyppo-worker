@@ -15,7 +15,7 @@ import scala.concurrent.{ExecutionContext, Future}
   * Created by jpetty on 2/9/16.
   */
 
-class S3JarFileLoader @Inject() (client: AmazonS3Client)(implicit @Assisted ec: ExecutionContext) extends JarFileLoader {
+final class S3JarFileLoader @Inject() (client: AmazonS3Client)(implicit @Assisted ec: ExecutionContext) extends JarFileLoader {
   private val tracker = new FileCleaningTracker()
 
   override def shutdown(): Unit = {

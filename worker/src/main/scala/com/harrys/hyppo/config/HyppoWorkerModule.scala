@@ -8,6 +8,7 @@ import com.harrys.hyppo.worker.actor.amqp.{RabbitQueueStatusActor, QueueHelpers,
 import com.harrys.hyppo.worker.actor.{WorkerFSM, CommanderActor}
 import com.harrys.hyppo.worker.actor.task.TaskFSM
 import com.harrys.hyppo.worker.data.{S3JarFileLoader, S3DataFileHandler, DataFileHandler, JarFileLoader}
+import com.harrys.hyppo.worker.scheduling._
 import com.sandinh.akuice.AkkaGuiceSupport
 
 import scala.concurrent.{ExecutionContextExecutor, ExecutionContext}
@@ -23,6 +24,7 @@ class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) exte
     //  Opportunity for overrides
     bindJarFileHandler()
     bindDataFileHandler()
+    bindWorkQueuePrioritizer()
     //  Setup injected actor bindings
     bindActorFactory[CommanderActor, CommanderActor.Factory]
     bindActorFactory[TaskFSM, TaskFSM.Factory]
@@ -42,6 +44,11 @@ class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) exte
       .implement(classOf[DataFileHandler], classOf[S3DataFileHandler])
       .build(classOf[DataFileHandler.Factory])
     install(module)
+  }
+
+  protected def bindWorkQueuePrioritizer(): Unit = {
+    val priorities = List(ExpectedCompletionOrdering, IdleSinceMinuteOrdering, ShufflePriorityOrdering)
+    bind(classOf[WorkQueuePrioritizer]).toInstance(WorkQueuePrioritizer.createWithPriorities(priorities))
   }
 
   @Provides

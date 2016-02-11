@@ -10,6 +10,7 @@ import com.harrys.hyppo.util.TimeUtils
 import com.harrys.hyppo.worker.actor.amqp._
 import com.harrys.hyppo.worker.actor.{RequestForAnyWork, RequestForPreferredWork, RequestForWork}
 import com.harrys.hyppo.worker.api.proto.WorkerInput
+import com.harrys.hyppo.worker.scheduling.{WorkQueueMetrics, WorkQueuePrioritizer}
 import com.sandinh.akuice.ActorInject
 import com.thenewmotion.akka.rabbitmq._
 
@@ -25,6 +26,7 @@ final class WorkDelegation @Inject()
   config:   WorkerConfig,
   naming:   QueueNaming,
   helpers:  QueueHelpers,
+  prioritizer: WorkQueuePrioritizer,
   statusFactory: RabbitQueueStatusActor.Factory
 ) extends Actor with ActorLogging with ActorInject {
 
@@ -97,6 +99,26 @@ final class WorkDelegation @Inject()
     }
   }
 
+  def createExecutionItem(channel: Channel, worker: ActorRef, queues: Iterator[SingleQueueDetails]): Option[WorkQueueExecution] = {
+    var result: Option[WorkQueueExecution] = None
+    while (result.isEmpty && queues.hasNext) {
+      val queue = queues.next()
+      dequeueWithoutAck(channel, queue.queueName) match {
+        case None       => log.debug(s"Failed to acquire any work from queue: ${ queue.queueName }")
+        case Some(item) =>
+          log.debug(s"Found work queue item: ${ item.input.summaryString }")
+          resources.leaseResources(channel, item.input.resources) match {
+            case Left(leases) =>
+              result = Some(WorkQueueExecution(channel, item.headers, item.input, leases))
+            case Right(ResourceUnavailable(unavailable)) =>
+              log.info(s"Unable to acquire ${ unavailable.inspect } to perform ${ item.input.summaryString }. Sending back to queue.")
+              channel.basicReject(item.headers.deliveryTag, true)
+          }
+      }
+    }
+    result
+  }
+
   @tailrec
   def createExecutionItem(channel: Channel, worker: ActorRef, queues: List[String]): Option[WorkQueueExecution] = {
     if (queues.isEmpty){
@@ -116,6 +138,15 @@ final class WorkDelegation @Inject()
           }
       }
     }
+  }
+
+  def integrationQueuePriorities(): Iterator[SingleQueueDetails] = {
+    val details = nonEmptyIntegrationQueueGroups().flatMap {
+      case single: SingleQueueDetails => Seq(single)
+      case multi:  MultiQueueDetails  => Random.shuffle(multi.queues)
+    }
+    val metrics = details.map(detail => WorkQueueMetrics(null, detail, Seq()))
+    prioritizer.prioritize(metrics).map(_.details)
   }
 
   def integrationQueueOrder: List[SingleQueueDetails] = {
