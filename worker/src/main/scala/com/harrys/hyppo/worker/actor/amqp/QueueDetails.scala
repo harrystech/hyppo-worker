@@ -16,6 +16,7 @@ sealed trait QueueDetails extends Product { self =>
   def unacknowledged: Int
   def idleSince: LocalDateTime
   final def isEmpty: Boolean = size <= 0
+  final def hasWork: Boolean = ready >= 1
   final def estimatedCompletionTime: Duration = {
     if (isEmpty){
       Duration.Zero

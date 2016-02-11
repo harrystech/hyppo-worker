@@ -140,12 +140,12 @@ final class WorkDelegation @Inject()
     }
   }
 
-  def integrationQueuePriorities(): Iterator[SingleQueueDetails] = {
+  def integrationQueuePriorities(): Iterator[QueueDetails] = {
     val details = nonEmptyIntegrationQueueGroups().flatMap {
       case single: SingleQueueDetails => Seq(single)
       case multi:  MultiQueueDetails  => Random.shuffle(multi.queues)
     }
-    val metrics = details.map(detail => WorkQueueMetrics(null, detail, Seq()))
+    val metrics = details.map(detail => WorkQueueMetrics(detail, Seq()))
     prioritizer.prioritize(metrics).map(_.details)
   }
 

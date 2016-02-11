@@ -19,13 +19,13 @@ object WorkQueuePrioritizer {
     if (chain.isEmpty || queues.size <= 1) {
       queues.toIterator
     } else {
-      val groupIterator = new LocalGroupEqualityIterator(chain.head, queues)
+      val groupIterator = new OrderingGroupPrioritizer(chain.head, queues)
       groupIterator.flatMap { group => recursivePrioritize(chain.tail, group) }
     }
   }
 
 
-  private final class LocalGroupEqualityIterator
+  private final class OrderingGroupPrioritizer
   (
     priority: PriorityOrdering,
     private var queues: Vector[WorkQueueMetrics]

@@ -13,7 +13,7 @@ trait PriorityOrdering extends Ordering[WorkQueueMetrics]
 object ExpectedCompletionOrdering extends PriorityOrdering {
 
   override def compare(x: WorkQueueMetrics, y: WorkQueueMetrics): Int = {
-    (estimatedCompletion(x) * -1.0) compareTo (estimatedCompletion(y) * -1.0)
+    (estimatedCompletion(x) compareTo estimatedCompletion(y)) * -1
   }
 
   private def estimatedCompletion(queue: WorkQueueMetrics): Double = {
@@ -33,5 +33,5 @@ object IdleSinceMinuteOrdering extends PriorityOrdering {
 }
 
 object ShufflePriorityOrdering extends PriorityOrdering {
-  override def compare(x: WorkQueueMetrics, y: WorkQueueMetrics): Int = Random.nextInt(2) - 1
+  override def compare(x: WorkQueueMetrics, y: WorkQueueMetrics): Int = Random.nextInt(3) - 1
 }
