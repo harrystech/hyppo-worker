@@ -48,7 +48,7 @@ class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) exte
 
   protected def bindWorkQueuePrioritizer(): Unit = {
     val priorities = List(ExpectedCompletionOrdering, IdleSinceMinuteOrdering, ShufflePriorityOrdering)
-    bind(classOf[WorkQueuePrioritizer]).toInstance(WorkQueuePrioritizer.createWithPriorities(priorities))
+    bind(classOf[WorkQueuePrioritizer]).toInstance(WorkQueuePrioritizer.withNestedPriorities(priorities))
   }
 
   @Provides
