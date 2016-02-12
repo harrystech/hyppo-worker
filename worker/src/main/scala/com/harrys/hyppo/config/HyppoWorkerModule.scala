@@ -5,6 +5,7 @@ import com.amazonaws.services.s3.AmazonS3Client
 import com.google.inject.assistedinject.FactoryModuleBuilder
 import com.google.inject.{Provides, Guice, Injector, AbstractModule}
 import com.harrys.hyppo.worker.actor.amqp.{RabbitQueueStatusActor, QueueHelpers, QueueNaming, RabbitHttpClient}
+import com.harrys.hyppo.worker.actor.queue._
 import com.harrys.hyppo.worker.actor.{WorkerFSM, CommanderActor}
 import com.harrys.hyppo.worker.actor.task.TaskFSM
 import com.harrys.hyppo.worker.data.{S3JarFileLoader, S3DataFileHandler, DataFileHandler, JarFileLoader}
@@ -24,7 +25,8 @@ class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) exte
     //  Opportunity for overrides
     bindJarFileHandler()
     bindDataFileHandler()
-    bindWorkQueuePrioritizer()
+    bindDelgationStrategy()
+    bindDelgationStrategy()
     //  Setup injected actor bindings
     bindActorFactory[CommanderActor, CommanderActor.Factory]
     bindActorFactory[TaskFSM, TaskFSM.Factory]
@@ -46,9 +48,19 @@ class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) exte
     install(module)
   }
 
-  protected def bindWorkQueuePrioritizer(): Unit = {
-    val priorities = List(ExpectedCompletionOrdering, IdleSinceMinuteOrdering, ShufflePriorityOrdering)
-    bind(classOf[WorkQueuePrioritizer]).toInstance(WorkQueuePrioritizer.withNestedPriorities(priorities))
+  protected def bindDelgationStrategy(): Unit = {
+    bind(classOf[QueueStatusTracker]).to(classOf[DefaultQueueStatusTracker])
+    val priorities = WorkQueuePrioritizer
+      .withNestedPriorities(
+        ExpectedCompletionOrdering,
+        IdleSinceMinuteOrdering,
+        ShufflePriorityOrdering
+      )
+    bind(classOf[WorkQueuePrioritizer]).toInstance(priorities)
+    val module = new FactoryModuleBuilder()
+      .implement(classOf[DelegationStrategy], classOf[DefaultDelegationStrategy])
+      .build(classOf[DelegationStrategy.Factory])
+    install(module)
   }
 
   @Provides

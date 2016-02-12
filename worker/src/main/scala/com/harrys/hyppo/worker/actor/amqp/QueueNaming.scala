@@ -42,7 +42,7 @@ final class QueueNaming(config: HyppoConfig) {
   }
 
   private val integrationPrefix: String = s"$prefix.integration"
-  private def integrationQueueBaseName(integration: ExecutableIntegration) : String = {
+  private def integrationQueueBaseName(integration: ExecutableIntegration): String = {
     val sourceFix = sanitizeIntegrationName(integration.sourceName)
     val version   = s"v-${integration.details.versionNumber}"
     s"$integrationPrefix.$sourceFix-$version"
@@ -53,7 +53,7 @@ final class QueueNaming(config: HyppoConfig) {
   }
 
   private val logicalBaseRegex = s"""$integrationPrefix\\.([^\\.]+).*""".r
-  def toLogicalQueueDetails(details: Iterable[SingleQueueDetails]) : Seq[QueueDetails] = {
+  def toLogicalQueueDetails(details: Iterable[SingleQueueDetails]): Seq[QueueDetails] = {
     val valueGroups = details.groupBy { single =>
       single.queueName match {
         case logicalBaseRegex(group) => group
