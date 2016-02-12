@@ -2,17 +2,16 @@ package com.harrys.hyppo.worker.actor.queue
 
 import javax.inject.Inject
 
+import com.google.inject.ImplementedBy
 import com.google.inject.assistedinject.Assisted
-import com.harrys.hyppo.worker.actor.amqp.RabbitQueueStatusActor.{QueueStatusUpdate, PartialStatusUpdate}
-import com.harrys.hyppo.worker.actor.amqp.{QueueDetails, SingleQueueDetails}
+
 import com.harrys.hyppo.worker.api.code.ExecutableIntegration
-import com.harrys.hyppo.worker.api.proto.WorkResource
-import com.harrys.hyppo.worker.scheduling.{WorkQueuePrioritizer, WorkQueueMetrics}
-import com.rabbitmq.client.Channel
+import com.harrys.hyppo.worker.scheduling.WorkQueuePrioritizer
 
 /**
   * Created by jpetty on 2/12/16.
   */
+@ImplementedBy(classOf[DefaultDelgationStrategy])
 trait DelegationStrategy {
   def priorityOrderWithoutAffinity(): Iterator[String]
   def priorityOrderWithPreference(prefer: ExecutableIntegration): Iterator[String]
@@ -24,7 +23,7 @@ object DelegationStrategy {
   }
 }
 
-final class DefaultDelegationStrategy @Inject()
+final class DefaultDelgationStrategy @Inject()
 (
   @Assisted statusTracker:   QueueStatusTracker,
   @Assisted workPrioritizer: WorkQueuePrioritizer
@@ -34,3 +33,4 @@ final class DefaultDelegationStrategy @Inject()
 
   override def priorityOrderWithPreference(prefer: ExecutableIntegration): Iterator[String] = ???
 }
+

@@ -58,10 +58,7 @@ class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) exte
         ShufflePriorityOrdering
       )
     bind(classOf[WorkQueuePrioritizer]).toInstance(priorities)
-    val module = new FactoryModuleBuilder()
-      .implement(classOf[DelegationStrategy], classOf[DefaultDelegationStrategy])
-      .build(classOf[DelegationStrategy.Factory])
-    install(module)
+    install(new FactoryModuleBuilder().build(classOf[DelegationStrategy.Factory]))
   }
 
   @Provides

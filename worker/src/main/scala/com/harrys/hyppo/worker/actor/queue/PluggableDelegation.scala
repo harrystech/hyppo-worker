@@ -6,10 +6,9 @@ import akka.actor.{ActorRef, ActorLogging, Actor}
 import com.google.inject.{Injector, Provider}
 import com.harrys.hyppo.Lifecycle
 import com.harrys.hyppo.config.WorkerConfig
-import com.harrys.hyppo.util.TimeUtils
 import com.harrys.hyppo.worker.actor.{RequestForAnyWork, RequestForPreferredWork, RequestForWork}
 import com.harrys.hyppo.worker.actor.amqp._
-import com.harrys.hyppo.worker.api.proto.WorkerInput
+import com.harrys.hyppo.worker.api.proto.{WorkResource, WorkerInput}
 import com.harrys.hyppo.worker.scheduling.WorkQueuePrioritizer
 import com.rabbitmq.client.Channel
 import com.sandinh.akuice.ActorInject
@@ -34,7 +33,7 @@ final class PluggableDelegation @Inject()
 
   //  Helper objects for dealing with queues
   val serializer    = new AMQPSerialization(config.secretKey)
-  val resources     = new ResourceLeasing
+  val leasing       = new ResourceLeasing
   //  The current known information about the queues, updated via assignment once fetched
   var currentStats  = Map[String, SingleQueueDetails]()
 
@@ -42,7 +41,9 @@ final class PluggableDelegation @Inject()
   val statusActor   = injectActor(statusPollingActorFactory(self), "queue-status")
   val strategy      = strategyFactory(statusTracker, prioritizer)
 
-  private final case class SyncAction(action: () => Unit)
+  //  Pinged back from the worker channel when the acquisition fails. This is to avoid concurrency race conditions
+  //  since resource leasing happens inside the worker channel's thread and not necessarily the delegation thread.
+  private final case class ResourceStatusSync(queue: String, resources: Seq[WorkResource], failed: Option[WorkResource])
 
   def shutdownImminent: Receive = {
     case request: RequestForWork =>
@@ -76,8 +77,11 @@ final class PluggableDelegation @Inject()
       log.debug(s"Received incremental queue status update for {} to size {}", partial.name, partial.size)
       statusTracker.handleStatusUpdate(partial)
 
-    case SyncAction(action) =>
-      action()
+    case ResourceStatusSync(queue, resources, failure) =>
+      failure match {
+        case Some(failed) => statusTracker.resourceAcquisitionFailed(queue, resources, failed)
+        case None         => statusTracker.resourcesAcquiredSuccessfully(queue, resources)
+      }
 
     case Lifecycle.ImpendingShutdown =>
       log.info("Shutdown is imminent. Ceasing work delegation")
@@ -92,7 +96,7 @@ final class PluggableDelegation @Inject()
       val queue = checkOrdering.next()
       tryExecutionAcquisition(channel, worker, queue) match {
         case Some(execution) =>
-          log.debug(s"Successfully acquired task execution: ${ execution.input.summaryString }")
+          log.debug("Successfully acquired task execution {} for worker {}", execution.input.summaryString, worker)
           worker ! execution
         case None => performDelegationSequence(channel, worker, checkOrdering)
       }
@@ -101,15 +105,15 @@ final class PluggableDelegation @Inject()
 
   def tryExecutionAcquisition(channel: Channel, worker: ActorRef, queue: String): Option[WorkQueueExecution] = {
     dequeueWithoutAck(channel, queue).flatMap { item =>
-      resources.leaseResources(channel, item.input.resources) match {
+      leasing.leaseResources(channel, item.input.resources) match {
         case Left(leases) =>
           val execution = WorkQueueExecution(channel, item.headers, item.input, leases)
-          self ! SyncAction(() => statusTracker.resourcesAcquiredSuccessfully(queue, item.input.resources))
+          self ! ResourceStatusSync(queue, item.input.resources, None)
           Some(execution)
         case Right(ResourceUnavailable(unavailable)) =>
-          log.info(s"Unable to acquire ${ unavailable.inspect } to perform ${ item.input.summaryString }. Sending back to queue.")
+          log.info("Unable to acquire {} to perform {}. Sending back to queue.", unavailable.inspect, item.input.summaryString)
+          self ! ResourceStatusSync(queue, item.input.resources, Some(unavailable))
           channel.basicReject(item.headers.deliveryTag, true)
-          self ! SyncAction(() => statusTracker.resourceAcquisitionFailed(queue, item.input.resources, unavailable))
           None
       }
     }
