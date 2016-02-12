@@ -54,6 +54,7 @@ class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) exte
       .withNestedPriorities(
         ExpectedCompletionOrdering,
         IdleSinceMinuteOrdering,
+        AbsoluteSizeOrdering,
         ShufflePriorityOrdering
       )
     bind(classOf[WorkQueuePrioritizer]).toInstance(priorities)

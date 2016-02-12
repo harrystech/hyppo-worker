@@ -34,6 +34,10 @@ object IdleSinceMinuteOrdering extends PriorityOrdering {
   }
 }
 
+object AbsoluteSizeOrdering extends PriorityOrdering {
+  override def compare(x: SingleQueueDetails, y: SingleQueueDetails): Int = x.size compareTo y.size
+}
+
 object ShufflePriorityOrdering extends PriorityOrdering {
   override def compare(x: SingleQueueDetails, y: SingleQueueDetails): Int = Random.nextInt(3) - 1
 }
