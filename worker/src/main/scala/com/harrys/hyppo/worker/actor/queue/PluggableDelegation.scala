@@ -77,11 +77,13 @@ final class PluggableDelegation @Inject()
       log.debug(s"Received incremental queue status update for {} to size {}", partial.name, partial.size)
       statusTracker.handleStatusUpdate(partial)
 
-    case ResourceStatusSync(queue, resources, failure) =>
-      failure match {
-        case Some(failed) => statusTracker.resourceAcquisitionFailed(queue, resources, failed)
-        case None         => statusTracker.resourcesAcquiredSuccessfully(queue, resources)
-      }
+    case ResourceStatusSync(queue, resources, Some(failed)) =>
+      log.debug("Failed to acquire resource {} for work queue {}", failed.inspect, queue)
+      statusTracker.resourceAcquisitionFailed(queue, resources, failed)
+
+    case ResourceStatusSync(queue, resources, None) =>
+      log.debug("Successfully acquired resources {} for work queue {}", resources.view.map(_.resourceName))
+      statusTracker.resourcesAcquiredSuccessfully(queue, resources)
 
     case Lifecycle.ImpendingShutdown =>
       log.info("Shutdown is imminent. Ceasing work delegation")
