@@ -20,6 +20,7 @@ final class DefaultQueueStatusTracker @Inject()(naming: QueueNaming, helpers: Qu
   private final case class TrackingRecord(details: SingleQueueDetails, resources: Seq[WorkResource]) {
     def hasResources: Boolean = resources.nonEmpty
     def resourceNames: Seq[String] = resources.map(_.resourceName)
+    def hasWorkInQueue: Boolean = details.ready > 0
   }
 
 
@@ -66,7 +67,13 @@ final class DefaultQueueStatusTracker @Inject()(naming: QueueNaming, helpers: Qu
     }
   }
 
-
+  /**
+    * Extracts known queue information for a given [[WorkResource]]. The underlying queue representations of
+    * a [[ConcurrencyWorkResource]] is only a single queue while [[ThrottledWorkResource]] instances have two
+    * underlying queues.
+    * @param resource The [[WorkResource]] to fetch information on.
+    * @return The [[ResourceQueueMetrics]] extracted for the provided resource, if it exists.
+    */
   private def fetchWorkResourceDetails(resource: WorkResource): Option[ResourceQueueMetrics] = resource match {
     case c: ConcurrencyWorkResource =>
       queues.get(c.queueName).map { tracking => ResourceQueueMetrics(resource, tracking.details) }
@@ -82,12 +89,14 @@ final class DefaultQueueStatusTracker @Inject()(naming: QueueNaming, helpers: Qu
 
   override def resourcesAcquiredSuccessfully(queue: String, resources: Seq[WorkResource]): Unit = {
     registerResourcesToQueue(queue, resources)
-
+    //  TODO: WorkResource penalty calculations here
+    ???
   }
 
   override def resourceAcquisitionFailed(queue: String, resources: Seq[WorkResource], failure: WorkResource): Unit = {
     registerResourcesToQueue(queue, resources)
-
+    //  TODO: WorkResource penalty calculations here
+    ???
   }
 
   private def registerResourcesToQueue(queue: String, resources: Seq[WorkResource]): Unit = {
