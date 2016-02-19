@@ -1,18 +1,18 @@
 package com.harrys.hyppo.config
 
+import java.time.Duration
+
 import akka.actor.ActorSystem
 import com.amazonaws.services.s3.AmazonS3Client
 import com.google.inject.assistedinject.FactoryModuleBuilder
-import com.google.inject.{Provides, Guice, Injector, AbstractModule}
-import com.harrys.hyppo.worker.actor.amqp.{RabbitQueueStatusActor, QueueHelpers, QueueNaming, RabbitHttpClient}
+import com.google.inject.{AbstractModule, Provides}
+import com.harrys.hyppo.worker.actor.amqp.{QueueHelpers, QueueNaming, RabbitHttpClient, RabbitQueueStatusActor}
 import com.harrys.hyppo.worker.actor.queue._
-import com.harrys.hyppo.worker.actor.{WorkerFSM, CommanderActor}
 import com.harrys.hyppo.worker.actor.task.TaskFSM
-import com.harrys.hyppo.worker.data.{S3JarFileLoader, S3DataFileHandler, DataFileHandler, JarFileLoader}
+import com.harrys.hyppo.worker.actor.{CommanderActor, WorkerFSM}
+import com.harrys.hyppo.worker.data.{DataFileHandler, JarFileLoader, S3DataFileHandler, S3JarFileLoader}
 import com.harrys.hyppo.worker.scheduling._
 import com.sandinh.akuice.AkkaGuiceSupport
-
-import scala.concurrent.{ExecutionContextExecutor, ExecutionContext}
 
 /**
   * Created by jpetty on 2/9/16.
@@ -25,8 +25,7 @@ class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) exte
     //  Opportunity for overrides
     bindJarFileHandler()
     bindDataFileHandler()
-    bindDelgationStrategy()
-    bindDelgationStrategy()
+    bindDelegationStrategy()
     //  Setup injected actor bindings
     bindActorFactory[CommanderActor, CommanderActor.Factory]
     bindActorFactory[TaskFSM, TaskFSM.Factory]
@@ -48,7 +47,7 @@ class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) exte
     install(module)
   }
 
-  protected def bindDelgationStrategy(): Unit = {
+  protected def bindDelegationStrategy(): Unit = {
     bind(classOf[QueueStatusTracker]).to(classOf[DefaultQueueStatusTracker])
     val priorities = WorkQueuePrioritizer
       .withNestedPriorities(
@@ -58,7 +57,10 @@ class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) exte
         ShufflePriorityOrdering
       )
     bind(classOf[WorkQueuePrioritizer]).toInstance(priorities)
-    install(new FactoryModuleBuilder().build(classOf[DelegationStrategy.Factory]))
+    val module = new FactoryModuleBuilder()
+      .implement(classOf[DelegationStrategy], classOf[DefaultDelegationStrategy])
+      .build(classOf[DelegationStrategy.Factory])
+    install(module)
   }
 
   @Provides
@@ -66,6 +68,12 @@ class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) exte
 
   @Provides
   def hyppoQueueHelpers(config: WorkerConfig): QueueHelpers = new QueueHelpers(config, hyppoQueueNaming(config))
+
+  @Provides
+  def recentWorkQueueContention(config: WorkerConfig): RecentResourceContention = {
+    val retention = Duration.ofMillis(config.resourceBackoffMaxValue.toMillis)
+    new RecentResourceContention(retention)
+  }
 
   @Provides
   def createRabbitMQClient(config: WorkerConfig): RabbitHttpClient = {

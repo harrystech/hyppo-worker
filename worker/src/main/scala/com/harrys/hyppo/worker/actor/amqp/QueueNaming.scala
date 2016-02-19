@@ -48,7 +48,11 @@ final class QueueNaming(config: HyppoConfig) {
     s"$integrationPrefix.$sourceFix-$version"
   }
 
-  def isIntegrationQueueName(name: String) : Boolean = {
+  def isWorkQueue(name: String): Boolean = {
+    generalQueueName == name || isIntegrationQueueName(name)
+  }
+
+  def isIntegrationQueueName(name: String): Boolean = {
     name.startsWith(integrationPrefix)
   }
 

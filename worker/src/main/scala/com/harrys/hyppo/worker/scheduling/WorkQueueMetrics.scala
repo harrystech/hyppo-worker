@@ -7,4 +7,5 @@ import com.harrys.hyppo.worker.actor.amqp.SingleQueueDetails
   */
 final case class WorkQueueMetrics(details: SingleQueueDetails, resources: Seq[ResourceQueueMetrics]) {
   def hasWork: Boolean = details.hasWork
+  def hasResourcesUnderContention: Boolean = resources.exists(_.isUnderContention)
 }

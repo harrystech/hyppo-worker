@@ -1,7 +1,7 @@
 package com.harrys.hyppo.config
 
 import com.harrys.hyppo.worker.exec.{AvroFileCodec, ExecutorSetup, TaskLogStrategy}
-import com.typesafe.config.{ConfigValueFactory, ConfigValue, Config}
+import com.typesafe.config.{Config, ConfigValue, ConfigValueFactory}
 
 import scala.collection.JavaConversions
 import scala.concurrent.duration._
@@ -44,6 +44,18 @@ final class WorkerConfig(config: Config) extends HyppoConfig(config) {
   }
 
   val uploadLogTimeout: FiniteDuration = Duration(config.getDuration("hyppo.worker.upload-log-timeout").toMillis, MILLISECONDS)
+
+  val resourceBackoffFactor = config.getDouble("hyppo.worker.resource-throttle.backoff-factor")
+  if (resourceBackoffFactor <= 0.0) {
+    throw new IllegalArgumentException(s"hyppo.worker.resource-throttle.backoff-factor must be > 0.0. Found: $resourceBackoffFactor")
+  }
+
+  val resourceBackoffMinValue = config.getDouble("hyppo.worker.resource-throttle.backoff-min-value")
+  if (resourceBackoffMinValue < 0.0) {
+    throw new IllegalArgumentException(s"hyppo.worker.resource-throttle.backoff-min-value must be >= 0.0. Found: $resourceBackoffMinValue")
+  }
+
+  val resourceBackoffMaxValue: FiniteDuration = Duration(config.getDuration("hyppo.worker.resource-throttle.backoff-min-value").toMillis, MILLISECONDS)
 
   def newExecutorSetup(): ExecutorSetup = defaultSetup.clone()
 

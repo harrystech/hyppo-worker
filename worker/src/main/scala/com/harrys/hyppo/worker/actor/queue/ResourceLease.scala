@@ -61,12 +61,12 @@ final case class ThrottledResourceLease
 
 final case class AcquiredResourceLeases(leases: Seq[ResourceLease]) {
 
-  def releaseAllUnconsumed() : Unit = {
-    leases.map { lease => Try(lease.releaseUnconsumed()) }.find(_.isFailure).getOrElse(Nil)
+  def releaseAllUnconsumed(): Unit = {
+    leases.map { lease => Try(lease.releaseUnconsumed()) }.find(_.isFailure).foreach { failure => failure.get }
   }
 
   def releaseAll() : Unit = {
-    leases.map { l => Try(l.release()) }.find(_.isFailure).getOrElse(Nil)
+    leases.map { l => Try(l.release()) }.find(_.isFailure).foreach { failure => failure.get }
   }
 }
 
