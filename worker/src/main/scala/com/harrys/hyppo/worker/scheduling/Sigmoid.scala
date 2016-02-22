@@ -17,13 +17,14 @@ object Sigmoid {
     * @return A value between 0.0 and 1.0 indicating the probability that a worker should re-attempt to acquire a resource
     */
   def gompertzCurveBackoffFactor(seconds: Int, scaleFactor: Double, delayFactor: Double): Double = {
-    assert(seconds >= 0, s"The number of seconds must be greater than or equal to 0. Received: $seconds")
-    assert(scaleFactor > 0.0, s"The scaleFactor must be greater than 0. Received: $scaleFactor")
-    assert(delayFactor > 0.0, s"The delayFactor must be greater than 0. Received: $delayFactor")
-    val c = (-1 * scaleFactor) * seconds
-    val b = (-1 * delayFactor) * Math.E
-    val result = Math.pow(Math.pow(Math.E, b), c)
-    assert(result >= 0.0 && result <= 1.0, s"Throttle curve value must be between 0.0 and 1.0, inclusive. Received: ${ result }")
-    result
+    if (seconds < 0) {
+      throw new IllegalArgumentException(s"The number of seconds must be greater than or equal to 0. Received: $seconds")
+    }
+    if (scaleFactor <= 0.0 || delayFactor <= 0.0) {
+      throw new IllegalArgumentException(s"The scaleFactor and delayFactor must be greater than 0. Received scaleFactor: $scaleFactor delayFactor: $delayFactor")
+    }
+    val ct = scaleFactor * seconds
+    val be = Math.pow(Math.E, -ct)
+    Math.pow(Math.E, -be)
   }
 }

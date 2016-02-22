@@ -40,6 +40,7 @@ fork in run := true
 
 libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "2.2.4" % Test,
+  "org.scalacheck" %% "scalacheck" % "1.12.5" % Test,
   "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
   "org.mockito" % "mockito-core" % "1.10.19" % Test
 )
@@ -51,8 +52,8 @@ testOptions in Test += Tests.Setup(() => {
 
 javaOptions in Test += "-Dtesting.classpath=" + (fullClasspath in Test).value.files.map(_.getAbsolutePath).mkString(":")
 
-//  Setup the J-Unit arguments for testing
-testOptions += Tests.Argument(TestFrameworks.ScalaTest)
+//  Setup the frameworks explicitly to keep ScalaCheck from running separately
+testFrameworks in Test := Seq(TestFrameworks.ScalaTest)
 
 exportJars := true
 
