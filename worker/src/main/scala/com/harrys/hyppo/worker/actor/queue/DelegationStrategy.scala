@@ -4,9 +4,8 @@ import java.time.{Duration, Instant}
 import javax.inject.Inject
 
 import com.google.inject.ImplementedBy
-import com.google.inject.assistedinject.Assisted
 import com.harrys.hyppo.config.WorkerConfig
-import com.harrys.hyppo.worker.actor.amqp.QueueNaming
+import com.harrys.hyppo.worker.actor.amqp.{SingleQueueDetails, QueueNaming}
 import com.harrys.hyppo.worker.api.code.ExecutableIntegration
 import com.harrys.hyppo.worker.api.proto.WorkResource
 import com.harrys.hyppo.worker.scheduling.{ResourceQueueMetrics, Sigmoid, WorkQueueMetrics, WorkQueuePrioritizer}
@@ -20,45 +19,37 @@ import scala.util.Random
   */
 @ImplementedBy(classOf[DefaultDelegationStrategy])
 trait DelegationStrategy {
-  def priorityOrderWithoutAffinity(): Iterator[String]
-  def priorityOrderWithPreference(prefer: ExecutableIntegration): Iterator[String]
-}
-
-object DelegationStrategy {
-  trait Factory {
-    def apply(@Assisted statusTracker: QueueStatusTracker, @Assisted prioritizer: WorkQueuePrioritizer): DelegationStrategy
-  }
+  def priorityOrderWithoutAffinity(general: WorkQueueMetrics, integration: Seq[WorkQueueMetrics]): Iterator[SingleQueueDetails]
+  def priorityOrderWithPreference(prefer: ExecutableIntegration, general: WorkQueueMetrics, integrations: Seq[WorkQueueMetrics]): Iterator[SingleQueueDetails]
 }
 
 final class DefaultDelegationStrategy @Inject()
 (
-  config: WorkerConfig,
-  naming: QueueNaming,
-  @Assisted statusTracker:   QueueStatusTracker,
-  @Assisted workPrioritizer: WorkQueuePrioritizer
+  config:          WorkerConfig,
+  naming:          QueueNaming,
+  workPrioritizer: WorkQueuePrioritizer
 ) extends DelegationStrategy {
 
   private val log = Logger(LoggerFactory.getLogger(this.getClass))
 
-  override def priorityOrderWithoutAffinity(): Iterator[String] = {
-    filterAndPrioritize(Seq(statusTracker.generalQueueMetrics()) ++ statusTracker.integrationQueueMetrics())
+  override def priorityOrderWithoutAffinity(general: WorkQueueMetrics, integrations: Seq[WorkQueueMetrics]): Iterator[SingleQueueDetails] = {
+    filterAndPrioritize(Seq(general) ++ integrations)
   }
 
-  override def priorityOrderWithPreference(prefer: ExecutableIntegration): Iterator[String] = {
+  override def priorityOrderWithPreference(prefer: ExecutableIntegration, general: WorkQueueMetrics, integrations: Seq[WorkQueueMetrics]): Iterator[SingleQueueDetails] = {
     val isAffinityMatch    = naming.belongsToIntegration(prefer) _
-    val (affinity, others) = statusTracker.integrationQueueMetrics().partition(metrics => isAffinityMatch(metrics.details.queueName))
-    val general = statusTracker.generalQueueMetrics()
+    val (affinity, others) = integrations.partition(metrics => isAffinityMatch(metrics.details.queueName))
 
     var result = filterAndPrioritize(affinity)
     if (general.hasWork) {
-      result ++= Seq(general.details.queueName)
+      result ++= Seq(general.details)
     }
     result ++ filterAndPrioritize(others)
   }
 
-  private def filterAndPrioritize(input: Seq[WorkQueueMetrics]): Iterator[String] = {
+  private def filterAndPrioritize(input: Seq[WorkQueueMetrics]): Iterator[SingleQueueDetails] = {
     val available = filterForResourceContention(input.filter(_.hasWork))
-    workPrioritizer.prioritize(available.map(_.details)).map(_.queueName)
+    workPrioritizer.prioritize(available.map(_.details))
   }
 
   private def filterForResourceContention(input: Seq[WorkQueueMetrics]): Seq[WorkQueueMetrics] = {

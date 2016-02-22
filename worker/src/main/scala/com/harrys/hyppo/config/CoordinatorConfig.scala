@@ -1,6 +1,6 @@
 package com.harrys.hyppo.config
 
-import com.typesafe.config.{ConfigValueFactory, ConfigValue, Config}
+import com.typesafe.config.{Config, ConfigValue, ConfigValueFactory}
 
 /**
  * Created by jpetty on 8/27/15.

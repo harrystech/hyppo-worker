@@ -7,7 +7,7 @@ import javax.inject.Inject
 import com.amazonaws.services.s3.AmazonS3Client
 import com.google.inject.assistedinject.Assisted
 import com.harrys.hyppo.worker.api.proto.RemoteStorageLocation
-import org.apache.commons.io.{FileUtils, FileCleaningTracker, IOUtils, FilenameUtils}
+import org.apache.commons.io.{FileCleaningTracker, FileUtils, FilenameUtils, IOUtils}
 
 import scala.concurrent.{ExecutionContext, Future}
 

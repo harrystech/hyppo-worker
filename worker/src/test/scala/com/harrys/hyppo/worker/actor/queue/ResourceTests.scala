@@ -3,10 +3,10 @@ package com.harrys.hyppo.worker.actor.queue
 import java.util.UUID
 
 import akka.testkit.TestActorRef
-import com.harrys.hyppo.worker.api.proto.{WorkResource, CreateIngestionTasksRequest}
-import com.harrys.hyppo.worker.{BlockingProcessedDataStub, TestObjects, TestConfig}
-import com.harrys.hyppo.worker.actor.{WorkerFSM, RabbitMQTests}
-import com.harrys.hyppo.worker.actor.amqp.RabbitHttpClient
+import com.harrys.hyppo.worker.actor.amqp.{RabbitHttpClient, RabbitQueueStatusActor}
+import com.harrys.hyppo.worker.actor.{RabbitMQTests, WorkerFSM}
+import com.harrys.hyppo.worker.api.proto.{CreateIngestionTasksRequest, WorkResource}
+import com.harrys.hyppo.worker.{BlockingProcessedDataStub, TestConfig, TestObjects}
 import org.scalatest.concurrent.Eventually
 
 /**
@@ -48,17 +48,15 @@ class ResourceTests extends RabbitMQTests(
     }
 
     "successfully acquire the work resource once" in {
+      delegator ! RabbitQueueStatusActor.QueueStatusUpdate(httpClient.fetchRawHyppoQueueDetails())
       val workerOne = TestActorRef(workerFactory(delegator, connectionActor), "worker-1")
       eventually {
-        val detail = httpClient.fetchRawQueueDetails().find(_.queueName == workQueue)
-        detail.isDefined shouldBe true
-        detail.get.unacknowledged shouldBe 1
+        val reserved = httpClient.fetchRawHyppoQueueDetails().find(_.queueName == workQueue).map(_.unacknowledged)
+        reserved.isDefined shouldBe true
+        reserved.get shouldBe 1
       }
     }
-
-
   }
-
 
   def createResourceWorkRequest(resource: WorkResource): CreateIngestionTasksRequest = {
     val source   = TestObjects.testIngestionSource("Resource Tests")

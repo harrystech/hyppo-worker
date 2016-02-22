@@ -1,11 +1,11 @@
-package com.harrys.hyppo.worker.actor.amqp
+package com.harrys.hyppo.worker.actor.queue
 
 import java.time.LocalDateTime
 import java.util.UUID
 
 import akka.testkit.{TestActorRef, TestProbe}
 import com.harrys.hyppo.util.TimeUtils
-import com.harrys.hyppo.worker.actor.queue.{WorkDelegation, WorkQueueExecution}
+import com.harrys.hyppo.worker.actor.amqp.{RabbitQueueStatusActor, SingleQueueDetails}
 import com.harrys.hyppo.worker.actor.{RabbitMQTests, RequestForAnyWork, RequestForPreferredWork}
 import com.harrys.hyppo.worker.api.proto.CreateIngestionTasksRequest
 import com.harrys.hyppo.worker.{TestConfig, TestObjects}
@@ -46,7 +46,7 @@ class WorkerDelegatorActorTests extends RabbitMQTests("WorkerDelegatorActorTests
       }
       val queues = workItems.map { item =>
         enqueueWork(item)
-        SingleQueueDetails(queueName = naming.integrationWorkQueueName(item), size = 1, rate = 0.0, ready = 0, unacknowledged = 0, idleSince = TimeUtils.currentLocalDateTime())
+        SingleQueueDetails(queueName = naming.integrationWorkQueueName(item), size = 1, rate = 0.0, ready = 1, unacknowledged = 0, idleSince = TimeUtils.currentLocalDateTime())
       }
       delegator ! RabbitQueueStatusActor.QueueStatusUpdate(queues)
       val metrics = delegator.underlyingActor.statusTracker.integrationQueueMetrics()
@@ -75,6 +75,7 @@ class WorkerDelegatorActorTests extends RabbitMQTests("WorkerDelegatorActorTests
         val probe  = TestProbe()
         val queues = Seq(SingleQueueDetails(queueName  = queueName, size = 1, rate = 0.0, ready = 1, unacknowledged = 0, idleSince = LocalDateTime.now()))
         delegator ! RabbitQueueStatusActor.QueueStatusUpdate(queues)
+        delegator.underlyingActor.statusTracker.integrationQueueMetrics().size shouldEqual 1
         probe.send(delegator, RequestForPreferredWork(workerChan, integration))
         val reply = probe.expectMsgType[WorkQueueExecution]
         reply.input shouldBe a[CreateIngestionTasksRequest]

@@ -1,7 +1,6 @@
 package com.harrys.hyppo.worker.data
 
 import java.io.File
-import java.nio.file.{Path, Files}
 import javax.inject.Inject
 
 import com.amazonaws.services.s3.AmazonS3Client
@@ -12,9 +11,9 @@ import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.source.api.model.DataIngestionTask
 import com.harrys.hyppo.worker.api.code.IntegrationUtils
 import com.harrys.hyppo.worker.api.proto._
-import org.apache.commons.io.{IOUtils, FilenameUtils, FileUtils}
-import org.joda.time.{DateTimeZone, LocalDate}
+import org.apache.commons.io.{FileUtils, FilenameUtils, IOUtils}
 import org.joda.time.format.ISODateTimeFormat
+import org.joda.time.{DateTimeZone, LocalDate}
 
 import scala.concurrent._
 

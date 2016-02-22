@@ -12,7 +12,6 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-actor"  % AkkaVersion,         // Akka actors
   "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",  // scala logging API
   "joda-time"         %  "joda-time"       % "2.8.1",         // better date / time APIs
-  "com.google.guava"  %   "guava"          % "18.0",          //  Caches / Other Utils
   "org.json4s"        %% "json4s-jackson"  % Json4sVersion,   // json4s - scala json interface wrapping jackson
   "org.json4s"        %% "json4s-ext"      % Json4sVersion,   // json4s <> joda-time extensions
   "commons-io"        %  "commons-io"      % "2.4",           // Handy utils for IO stuff

@@ -20,8 +20,8 @@ class UnsafeWorkQueueingTests extends RabbitMQTests("UnsafeWorkQueueingTests", T
 
   val injector          = TestConfig.localWorkerInjector(system, config)
   val workerFSMFactory  = injector.getInstance(classOf[WorkerFSM.Factory])
-  val rabbitHttp   = config.newRabbitMQApiClient()
-  val channelActor = createChannelActor()
+  val rabbitHttp        = config.newRabbitMQApiClient()
+  val channelActor      = createChannelActor()
 
 
   "The Workers" when {

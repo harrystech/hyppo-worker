@@ -5,7 +5,7 @@ import java.io.File
 import akka.actor.ActorSystem
 import com.google.inject.{Guice, Injector}
 import com.harrys.hyppo.HyppoWorker
-import com.harrys.hyppo.config.{HyppoCoordinatorModule, HyppoWorkerModule, CoordinatorConfig, WorkerConfig}
+import com.harrys.hyppo.config.{CoordinatorConfig, HyppoCoordinatorModule, WorkerConfig}
 import com.harrys.hyppo.util.ConfigUtils
 import com.typesafe.config.{Config, ConfigValueFactory}
 

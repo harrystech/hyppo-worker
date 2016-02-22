@@ -9,7 +9,6 @@ import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.actor.amqp._
 import com.harrys.hyppo.worker.actor.{RequestForAnyWork, RequestForPreferredWork, RequestForWork}
 import com.harrys.hyppo.worker.api.proto.{WorkResource, WorkerInput}
-import com.harrys.hyppo.worker.scheduling.WorkQueuePrioritizer
 import com.rabbitmq.client.Channel
 import com.sandinh.akuice.ActorInject
 import com.thenewmotion.akka.rabbitmq._
@@ -23,9 +22,8 @@ final class WorkDelegation @Inject()
 (
   injectorProvider:   Provider[Injector],
   val config:         WorkerConfig,
-  val statusTracker:  QueueStatusTracker,
-  val prioritizer:    WorkQueuePrioritizer,
-  strategyFactory:    DelegationStrategy.Factory,
+  val statusTracker:  QueueMetricsTracker,
+  val strategy:       DelegationStrategy,
   statusPollingActorFactory: RabbitQueueStatusActor.Factory
 ) extends Actor with ActorLogging with ActorInject {
 
@@ -37,7 +35,6 @@ final class WorkDelegation @Inject()
 
   //  Actor that sends status update events
   val statusActor   = injectActor(statusPollingActorFactory(self), "queue-status")
-  val strategy      = strategyFactory(statusTracker, prioritizer)
 
   //  Pinged back from the worker channel when the acquisition fails. This is to avoid concurrency race conditions
   //  since resource leasing happens inside the worker channel's thread and not necessarily the delegation thread.
@@ -51,16 +48,16 @@ final class WorkDelegation @Inject()
   override def receive: Receive = {
     case RequestForPreferredWork(channelActor, prefer) =>
       val worker   = sender()
-      val ordering = strategy.priorityOrderWithPreference(prefer)
+      val ordering = strategy.priorityOrderWithPreference(prefer, statusTracker.generalQueueMetrics(), statusTracker.integrationQueueMetrics())
       if (ordering.hasNext) {
         channelActor ! ChannelMessage(c => performDelegationSequence(c, worker, ordering))
       } else {
-        log.debug("No work is currently available in any queue. Ignoring request from {} with work preference {}", worker, prefer)
+        log.debug("No work is currently available in any queue. Ignoring request from {} with work preference {}", worker, prefer.printableName)
       }
 
     case RequestForAnyWork(channelActor) =>
       val worker   = sender()
-      val ordering = strategy.priorityOrderWithoutAffinity()
+      val ordering = strategy.priorityOrderWithoutAffinity(statusTracker.generalQueueMetrics(), statusTracker.integrationQueueMetrics())
       if (ordering.hasNext) {
         channelActor ! ChannelMessage(c => performDelegationSequence(c, worker, ordering))
       } else {
@@ -91,7 +88,7 @@ final class WorkDelegation @Inject()
 
 
   @tailrec
-  def performDelegationSequence(channel: Channel, worker: ActorRef, checkOrdering: Iterator[String]): Unit = {
+  def performDelegationSequence(channel: Channel, worker: ActorRef, checkOrdering: Iterator[SingleQueueDetails]): Unit = {
     if (checkOrdering.hasNext) {
       val queue = checkOrdering.next()
       tryExecutionAcquisition(channel, worker, queue) match {
@@ -103,16 +100,16 @@ final class WorkDelegation @Inject()
     }
   }
 
-  def tryExecutionAcquisition(channel: Channel, worker: ActorRef, queue: String): Option[WorkQueueExecution] = {
-    dequeueWithoutAck(channel, queue).flatMap { item =>
+  def tryExecutionAcquisition(channel: Channel, worker: ActorRef, queue: SingleQueueDetails): Option[WorkQueueExecution] = {
+    dequeueWithoutAck(channel, queue.queueName).flatMap { item =>
       leasing.leaseResources(channel, item.input.resources) match {
         case Left(leases) =>
           val execution = WorkQueueExecution(channel, item.headers, item.input, leases)
-          self ! ResourceStatusSync(queue, item.input.resources, None)
+          self ! ResourceStatusSync(queue.queueName, item.input.resources, None)
           Some(execution)
         case Right(ResourceUnavailable(unavailable)) =>
           log.info("Unable to acquire {} to perform {}. Sending back to queue.", unavailable.inspect, item.input.summaryString)
-          self ! ResourceStatusSync(queue, item.input.resources, Some(unavailable))
+          self ! ResourceStatusSync(queue.queueName, item.input.resources, Some(unavailable))
           channel.basicReject(item.headers.deliveryTag, true)
           None
       }

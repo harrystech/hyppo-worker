@@ -5,7 +5,7 @@ import java.time.Duration
 import akka.actor.ActorSystem
 import com.amazonaws.services.s3.AmazonS3Client
 import com.google.inject.assistedinject.FactoryModuleBuilder
-import com.google.inject.{AbstractModule, Provides}
+import com.google.inject.{AbstractModule, Module, Provides}
 import com.harrys.hyppo.worker.actor.amqp.{QueueHelpers, QueueNaming, RabbitHttpClient, RabbitQueueStatusActor}
 import com.harrys.hyppo.worker.actor.queue._
 import com.harrys.hyppo.worker.actor.task.TaskFSM
@@ -23,44 +23,50 @@ class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) exte
     bind(classOf[WorkerConfig]).toInstance(config)
     bind(classOf[ActorSystem]).toInstance(system)
     //  Opportunity for overrides
-    bindJarFileHandler()
-    bindDataFileHandler()
-    bindDelegationStrategy()
+    bind(classOf[QueueMetricsTracker]).to(workQueueManagerClass)
+    bind(classOf[DelegationStrategy]).to(delegationStrategyClass)
+    install(createJarFileHandlerFactory())
+    install(createDataFileHandlerFactory())
     //  Setup injected actor bindings
     bindActorFactory[CommanderActor, CommanderActor.Factory]
     bindActorFactory[TaskFSM, TaskFSM.Factory]
     bindActorFactory[WorkerFSM, WorkerFSM.Factory]
+    bindRabbitQueueStatusActorFactory()
+  }
+
+  protected def delegationStrategyClass: Class[_ <: DelegationStrategy] = classOf[DefaultDelegationStrategy]
+
+  protected def workQueueManagerClass: Class[_ <: QueueMetricsTracker] = classOf[DefaultQueueMetricsTracker]
+
+  protected def jarFileLoaderClass: Class[_ <: JarFileLoader] = classOf[S3JarFileLoader]
+
+  protected def dataFileHandlerClass: Class[_ <: DataFileHandler] = classOf[S3DataFileHandler]
+
+  protected def createJarFileHandlerFactory(): Module = {
+    new FactoryModuleBuilder()
+      .implement(classOf[JarFileLoader], jarFileLoaderClass)
+      .build(classOf[JarFileLoader.Factory])
+  }
+
+  protected def createDataFileHandlerFactory(): Module = {
+    new FactoryModuleBuilder()
+      .implement(classOf[DataFileHandler], dataFileHandlerClass)
+      .build(classOf[DataFileHandler.Factory])
+  }
+
+
+  protected def bindRabbitQueueStatusActorFactory(): Unit = {
     bindActorFactory[RabbitQueueStatusActor, RabbitQueueStatusActor.Factory]
   }
 
-  protected def bindJarFileHandler(): Unit = {
-    val module = new FactoryModuleBuilder()
-      .implement(classOf[JarFileLoader], classOf[S3JarFileLoader])
-      .build(classOf[JarFileLoader.Factory])
-    install(module)
-  }
-
-  protected def bindDataFileHandler(): Unit = {
-    val module = new FactoryModuleBuilder()
-      .implement(classOf[DataFileHandler], classOf[S3DataFileHandler])
-      .build(classOf[DataFileHandler.Factory])
-    install(module)
-  }
-
-  protected def bindDelegationStrategy(): Unit = {
-    bind(classOf[QueueStatusTracker]).to(classOf[DefaultQueueStatusTracker])
-    val priorities = WorkQueuePrioritizer
-      .withNestedPriorities(
-        ExpectedCompletionOrdering,
-        IdleSinceMinuteOrdering,
-        AbsoluteSizeOrdering,
-        ShufflePriorityOrdering
-      )
-    bind(classOf[WorkQueuePrioritizer]).toInstance(priorities)
-    val module = new FactoryModuleBuilder()
-      .implement(classOf[DelegationStrategy], classOf[DefaultDelegationStrategy])
-      .build(classOf[DelegationStrategy.Factory])
-    install(module)
+  @Provides
+  def workQueuePrioritizer(): WorkQueuePrioritizer = {
+    WorkQueuePrioritizer.withNestedPriorities(
+      ExpectedCompletionOrdering,
+      IdleSinceMinuteOrdering,
+      AbsoluteSizeOrdering,
+      ShufflePriorityOrdering
+    )
   }
 
   @Provides

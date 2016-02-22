@@ -20,7 +20,7 @@ object RabbitQueueStatusActor {
   final case class PartialStatusUpdate(name: String, size: Int)
 
   trait Factory {
-    def apply(@Assisted("delegator") delegator: ActorRef): RabbitQueueStatusActor
+    def apply(@Assisted("delegator") delegator: ActorRef): Actor
   }
 }
 

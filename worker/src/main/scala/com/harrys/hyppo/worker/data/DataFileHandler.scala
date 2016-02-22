@@ -1,7 +1,6 @@
 package com.harrys.hyppo.worker.data
 
 import java.io.File
-import java.nio.file.Path
 
 import com.harrys.hyppo.source.api.model.DataIngestionTask
 import com.harrys.hyppo.worker.api.proto._

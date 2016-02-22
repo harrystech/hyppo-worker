@@ -3,14 +3,12 @@ package com.harrys.hyppo.worker.actor
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestActorRef, TestKit}
 import akka.util.Timeout
-import com.harrys.hyppo.config.{WorkerConfig, HyppoConfig}
+import com.harrys.hyppo.config.HyppoConfig
 import com.harrys.hyppo.util.TimeUtils
-import com.harrys.hyppo.worker.TestConfig
 import com.harrys.hyppo.worker.actor.amqp.{AMQPMessageProperties, AMQPSerialization, QueueHelpers, QueueNaming}
 import com.harrys.hyppo.worker.actor.queue.{QueueItemHeaders, ResourceLeasing, WorkQueueExecution}
 import com.harrys.hyppo.worker.api.proto._
 import com.rabbitmq.client.{Channel, Connection, ConnectionFactory}
-import com.sandinh.akuice.ActorInject
 import com.thenewmotion.akka.rabbitmq.ConnectionActor
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 

@@ -5,8 +5,8 @@ import javax.inject.Inject
 import akka.actor._
 import akka.pattern.gracefulStop
 import akka.util.Timeout
-import com.google.inject.{Provider, Injector}
 import com.google.inject.assistedinject.Assisted
+import com.google.inject.{Injector, Provider}
 import com.harrys.hyppo.Lifecycle
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.actor.WorkerFSM._

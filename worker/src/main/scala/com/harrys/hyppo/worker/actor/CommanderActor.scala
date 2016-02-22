@@ -6,7 +6,6 @@ import java.util.concurrent.TimeoutException
 import javax.inject.Inject
 
 import akka.actor.{Actor, ActorLogging, ActorRef}
-import com.google.inject.Injector
 import com.google.inject.assistedinject.Assisted
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.executor.cli.ExecutorMain
@@ -16,11 +15,8 @@ import com.harrys.hyppo.source.api.model.{DataIngestionJob, TaskAssociations}
 import com.harrys.hyppo.worker.actor.task.TaskFSMEvent
 import com.harrys.hyppo.worker.api.code.{IntegrationCode, IntegrationSchema}
 import com.harrys.hyppo.worker.api.proto._
-import com.harrys.hyppo.worker.data.{TempFilePool, DataFileHandler, LoadedJarFile}
+import com.harrys.hyppo.worker.data.{DataFileHandler, LoadedJarFile, TempFilePool}
 import com.harrys.hyppo.worker.proc.{CommandExecutionException, CommandOutput, ExecutorException, SimpleCommander}
-import com.sandinh.akuice.ActorInject
-import org.apache.commons.io.FileUtils
-import org.apache.commons.io.filefilter.{TrueFileFilter, FileFilterUtils, IOFileFilter}
 
 import scala.collection.JavaConversions
 import scala.concurrent.Future

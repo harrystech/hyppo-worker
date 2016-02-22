@@ -2,11 +2,9 @@ package com.harrys.hyppo.config
 
 import akka.actor.ActorSystem
 import com.amazonaws.services.s3.AmazonS3Client
-import com.google.inject.{Provides, AbstractModule}
-import com.harrys.hyppo.worker.actor.amqp.{RabbitHttpClient, QueueHelpers, QueueNaming}
+import com.google.inject.{AbstractModule, Provides}
+import com.harrys.hyppo.worker.actor.amqp.{QueueHelpers, QueueNaming, RabbitHttpClient}
 import com.sandinh.akuice.AkkaGuiceSupport
-
-import scala.concurrent.{ExecutionContextExecutor, ExecutionContext}
 
 /**
   * Created by jpetty on 2/10/16.
