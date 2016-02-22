@@ -9,6 +9,7 @@ import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.actor.amqp._
 import com.harrys.hyppo.worker.actor.{RequestForAnyWork, RequestForPreferredWork, RequestForWork}
 import com.harrys.hyppo.worker.api.proto.{WorkResource, WorkerInput}
+import com.harrys.hyppo.worker.scheduling.DelegationStrategy
 import com.rabbitmq.client.Channel
 import com.sandinh.akuice.ActorInject
 import com.thenewmotion.akka.rabbitmq._

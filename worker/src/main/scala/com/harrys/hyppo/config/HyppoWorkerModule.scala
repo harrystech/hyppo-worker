@@ -14,6 +14,8 @@ import com.harrys.hyppo.worker.data.{DataFileHandler, JarFileLoader, S3DataFileH
 import com.harrys.hyppo.worker.scheduling._
 import com.sandinh.akuice.AkkaGuiceSupport
 
+import scala.util.Random
+
 /**
   * Created by jpetty on 2/9/16.
   */
@@ -68,6 +70,9 @@ class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) exte
       ShufflePriorityOrdering
     )
   }
+
+  @Provides
+  def random: Random = Random
 
   @Provides
   def hyppoQueueNaming(config: WorkerConfig): QueueNaming = new QueueNaming(config)

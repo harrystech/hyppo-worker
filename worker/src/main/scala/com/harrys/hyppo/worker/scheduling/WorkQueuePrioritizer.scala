@@ -21,6 +21,10 @@ object WorkQueuePrioritizer {
       recursivePrioritize(priorities, queues.toVector)
     }
 
+    override def toString: String = {
+      s"${ this.getClass.getSimpleName }(priorities=${ priorities.mkString(", ") })"
+    }
+
     private def recursivePrioritize(chain: List[PriorityOrdering], queues: Vector[SingleQueueDetails]): Iterator[SingleQueueDetails] = {
       if (queues.size <= 1) {
         queues.toIterator

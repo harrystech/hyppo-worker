@@ -21,7 +21,7 @@ import scala.collection.immutable.NumericRange
 class WorkQueuePrioritizerTests extends PropSpec with Matchers with GeneratorDrivenPropertyChecks {
 
   property("prioritizes the queues based on the highest priority ordering first") {
-    forAll(Gen.nonEmptyListOf(singleQueueItems), stableOrderingGen) {
+    forAll(Gen.nonEmptyListOf(integrationWorkQueueDetailsGen), stableOrderingGen) {
       (items: List[SingleQueueDetails], ordering: List[PriorityOrdering]) =>
         val firstOrdering = ordering.head
         val prioritizer   = createPrioritizer(ordering)
@@ -31,7 +31,7 @@ class WorkQueuePrioritizerTests extends PropSpec with Matchers with GeneratorDri
   }
 
   property("retains the effective input size of the queues passed to it") {
-    forAll(Gen.listOf(singleQueueItems), validOrderingGen) {
+    forAll(Gen.listOf(integrationWorkQueueDetailsGen), validOrderingGen) {
       (items: List[SingleQueueDetails], ordering: List[PriorityOrdering]) =>
         val prioritized = createPrioritizer(ordering).prioritize(items)
         prioritized.count(_ => true) shouldEqual items.length
@@ -61,7 +61,7 @@ class WorkQueuePrioritizerTests extends PropSpec with Matchers with GeneratorDri
 
   val workResourcesGen = CustomGens.workResourcesGen(naming)
 
-  val singleQueueItems = CustomGens.singleQueueDetailsGen(naming, workResourcesGen)
+  val integrationWorkQueueDetailsGen = CustomGens.integrationWorkQueueDetailsGen(naming, workResourcesGen)
 
   def createPrioritizer(ordering: List[PriorityOrdering]): WorkQueuePrioritizer = {
     val firstOrdering  = ordering.head

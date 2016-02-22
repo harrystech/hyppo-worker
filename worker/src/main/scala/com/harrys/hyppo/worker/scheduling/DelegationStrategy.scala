@@ -1,14 +1,13 @@
-package com.harrys.hyppo.worker.actor.queue
+package com.harrys.hyppo.worker.scheduling
 
 import java.time.{Duration, Instant}
 import javax.inject.Inject
 
 import com.google.inject.ImplementedBy
 import com.harrys.hyppo.config.WorkerConfig
-import com.harrys.hyppo.worker.actor.amqp.{SingleQueueDetails, QueueNaming}
+import com.harrys.hyppo.worker.actor.amqp.{QueueNaming, SingleQueueDetails}
 import com.harrys.hyppo.worker.api.code.ExecutableIntegration
 import com.harrys.hyppo.worker.api.proto.WorkResource
-import com.harrys.hyppo.worker.scheduling.{ResourceQueueMetrics, Sigmoid, WorkQueueMetrics, WorkQueuePrioritizer}
 import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
 
@@ -27,24 +26,29 @@ final class DefaultDelegationStrategy @Inject()
 (
   config:          WorkerConfig,
   naming:          QueueNaming,
-  workPrioritizer: WorkQueuePrioritizer
+  workPrioritizer: WorkQueuePrioritizer,
+  random:          Random
 ) extends DelegationStrategy {
 
   private val log = Logger(LoggerFactory.getLogger(this.getClass))
 
   override def priorityOrderWithoutAffinity(general: WorkQueueMetrics, integrations: Seq[WorkQueueMetrics]): Iterator[SingleQueueDetails] = {
-    filterAndPrioritize(Seq(general) ++ integrations)
+    if (general.hasWork) {
+      Iterator(general.details) ++ filterAndPrioritize(integrations)
+    } else {
+      filterAndPrioritize(integrations)
+    }
   }
 
   override def priorityOrderWithPreference(prefer: ExecutableIntegration, general: WorkQueueMetrics, integrations: Seq[WorkQueueMetrics]): Iterator[SingleQueueDetails] = {
     val isAffinityMatch    = naming.belongsToIntegration(prefer) _
     val (affinity, others) = integrations.partition(metrics => isAffinityMatch(metrics.details.queueName))
 
-    var result = filterAndPrioritize(affinity)
     if (general.hasWork) {
-      result ++= Seq(general.details)
+      (filterAndPrioritize(affinity) ++ Seq(general.details)) ++ filterAndPrioritize(others)
+    } else {
+      filterAndPrioritize(affinity) ++ filterAndPrioritize(others)
     }
-    result ++ filterAndPrioritize(others)
   }
 
   private def filterAndPrioritize(input: Seq[WorkQueueMetrics]): Iterator[SingleQueueDetails] = {
@@ -79,7 +83,7 @@ final class DefaultDelegationStrategy @Inject()
       case Some(time) if ignore.contains(metrics.resource)  => false
       case Some(time)  =>
         val threshold = computeAllowanceThreshold(time)
-        val randomVal = Random.nextDouble()
+        val randomVal = random.nextDouble()
         if (randomVal <= threshold) {
           log.debug(s"Accepting work dependent on ${ metrics.resource } based on probabilistic backoff. Threshold $threshold >= $randomVal")
           attempt += metrics.resource

@@ -12,7 +12,7 @@ import scala.util.Random
   */
 trait PriorityOrdering extends Ordering[SingleQueueDetails]
 
-object ExpectedCompletionOrdering extends PriorityOrdering {
+case object ExpectedCompletionOrdering extends PriorityOrdering {
 
   override def compare(x: SingleQueueDetails, y: SingleQueueDetails): Int = {
     (estimatedCompletion(x) compareTo estimatedCompletion(y)) * -1
@@ -21,9 +21,11 @@ object ExpectedCompletionOrdering extends PriorityOrdering {
   private def estimatedCompletion(details: SingleQueueDetails): Double = {
     if (details.rate == 0.0) Double.PositiveInfinity else details.ready.toDouble / details.rate
   }
+
+  override def toString: String = this.productPrefix
 }
 
-object IdleSinceMinuteOrdering extends PriorityOrdering {
+case object IdleSinceMinuteOrdering extends PriorityOrdering {
 
   override def compare(x: SingleQueueDetails, y: SingleQueueDetails): Int = {
     idleSinceMinute(x) compareTo idleSinceMinute(y)
@@ -32,12 +34,16 @@ object IdleSinceMinuteOrdering extends PriorityOrdering {
   private def idleSinceMinute(details: SingleQueueDetails): Long = {
     details.idleSince.truncatedTo(ChronoUnit.MINUTES).toEpochSecond(ZoneOffset.UTC)
   }
+
+  override def toString: String = this.productPrefix
 }
 
-object AbsoluteSizeOrdering extends PriorityOrdering {
+case object AbsoluteSizeOrdering extends PriorityOrdering {
   override def compare(x: SingleQueueDetails, y: SingleQueueDetails): Int = x.size compareTo y.size
+  override def toString: String = this.productPrefix
 }
 
-object ShufflePriorityOrdering extends PriorityOrdering {
+case object ShufflePriorityOrdering extends PriorityOrdering {
   override def compare(x: SingleQueueDetails, y: SingleQueueDetails): Int = Random.nextInt(3) - 1
+  override def toString: String = this.productPrefix
 }
