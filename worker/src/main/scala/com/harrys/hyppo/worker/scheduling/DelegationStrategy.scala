@@ -89,18 +89,18 @@ final class DefaultDelegationStrategy @Inject()
       case Some(time)  =>
         val waitedTime = Duration.between(time, Instant.now(Clock.systemUTC()))
         if (waitedTime.minus(config.resourceBackoffMinDelay).isNegative) {
-          log.debug(s"Ignoring any work dependent on ${ metrics.resource } based on minimum delay factor")
+          log.trace(s"Ignoring any work dependent on ${ metrics.resource } based on minimum delay factor")
           ignore += metrics.resource
           false
         } else {
           val threshold = computeAllowanceThreshold(metrics, waitedTime)
           val randomVal = random.nextDouble()
           if (randomVal <= threshold) {
-            log.debug(s"Allowing work dependent on ${ metrics.resource } based on probabilistic backoff. Threshold $threshold >= $randomVal")
+            log.trace(s"Allowing work dependent on ${ metrics.resource } based on probabilistic backoff. Threshold $threshold >= $randomVal")
             attempt += metrics.resource
             true
           } else {
-            log.debug(s"Ignoring any work dependent on ${ metrics.resource } based on probabilistic backoff. Threshold $threshold < $randomVal")
+            log.trace(s"Ignoring any work dependent on ${ metrics.resource } based on probabilistic backoff. Threshold $threshold < $randomVal")
             ignore += metrics.resource
             false
           }
