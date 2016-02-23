@@ -2,10 +2,9 @@ package com.harrys.hyppo.worker
 
 import java.time.Duration
 
+import com.harrys.hyppo.source.api.PersistingSemantics
 import com.harrys.hyppo.source.api.task._
 import com.harrys.hyppo.worker.rt.data.TestRecord
-import com.typesafe.scalalogging.Logger
-import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConversions
 
@@ -37,6 +36,9 @@ class BlockingProcessedDataStub extends ProcessedDataStub {
   override def newProcessedDataPersister(): ProcessedDataPersister[TestRecord] = {
     val parent = super.newProcessedDataPersister()
     new ProcessedDataPersister[TestRecord] {
+
+      override def semantics = PersistingSemantics.Unsafe
+
       override def persistProcessedData(operation: PersistProcessedData[TestRecord]): Unit = {
         Thread.sleep(sleepDuration.toMillis)
         parent.persistProcessedData(operation)

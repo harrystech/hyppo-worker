@@ -1,6 +1,9 @@
 package com.harrys.hyppo.worker.actor.task
 
+import javax.inject.Inject
+
 import akka.actor._
+import com.google.inject.assistedinject.Assisted
 import com.harrys.hyppo.Lifecycle.ImpendingShutdown
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.actor.amqp.{AMQPMessageProperties, AMQPSerialization}
@@ -15,11 +18,11 @@ import scala.util.Try
 /**
  * Created by jpetty on 10/29/15.
  */
-final class TaskFSM
+final class TaskFSM @Inject()
 (
-  config:     WorkerConfig,
-  execution:  WorkQueueExecution,
-  commander:  ActorRef
+  config:               WorkerConfig,
+  @Assisted("execution") execution:  WorkQueueExecution,
+  @Assisted("commander") commander:  ActorRef
 ) extends FSM[TaskFSMStatus, Unit] with ActorLogging {
 
   private val serialization = new AMQPSerialization(config.secretKey)
@@ -160,5 +163,11 @@ final class TaskFSM
     val props = AMQPMessageProperties.replyProperties(execution.headers)
     log.debug("Publishing response for {} to queue {} : {}", execution.input.summaryString, execution.headers.replyToQueue, response)
     channel.basicPublish("", execution.headers.replyToQueue, true, false, props, body)
+  }
+}
+
+object TaskFSM {
+  trait Factory {
+    def apply(@Assisted("execution") execution: WorkQueueExecution, @Assisted("commander") commander: ActorRef): TaskFSM
   }
 }

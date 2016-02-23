@@ -1,7 +1,7 @@
 package com.harrys.hyppo.config
 
 import com.harrys.hyppo.worker.exec.{AvroFileCodec, ExecutorSetup, TaskLogStrategy}
-import com.typesafe.config.Config
+import com.typesafe.config.{Config, ConfigValue, ConfigValueFactory}
 
 import scala.collection.JavaConversions
 import scala.concurrent.duration._
@@ -45,8 +45,37 @@ final class WorkerConfig(config: Config) extends HyppoConfig(config) {
 
   val uploadLogTimeout: FiniteDuration = Duration(config.getDuration("hyppo.worker.upload-log-timeout").toMillis, MILLISECONDS)
 
+  val resourceBackoffScaleFactor = config.getDouble("hyppo.worker.resource-throttle.backoff-scale-factor")
+  if (resourceBackoffScaleFactor <= 0.0) {
+    throw new IllegalArgumentException(s"hyppo.worker.resource-throttle.backoff-scale-factor must be > 0.0. Found: $resourceBackoffScaleFactor")
+  }
 
+  val resourceBackoffMinDelay = config.getDuration("hyppo.worker.resource-throttle.backoff-min-delay")
+  if (resourceBackoffMinDelay.isZero || resourceBackoffMinDelay.isNegative) {
+    throw new IllegalArgumentException(s"hyppo.worker.resource-throttle.backoff-min-delay must be > 0. Found: $resourceBackoffMinDelay")
+  }
+
+  val resourceBackoffMaxValue: FiniteDuration = Duration(config.getDuration("hyppo.worker.resource-throttle.backoff-max-wait").toMillis, MILLISECONDS)
 
   def newExecutorSetup(): ExecutorSetup = defaultSetup.clone()
 
+  def withValue(path: String, value: ConfigValue): WorkerConfig = {
+    new WorkerConfig(underlying.withValue(path, value))
+  }
+
+  def withValue(path: String, value: String): WorkerConfig = {
+    withValue(path, ConfigValueFactory.fromAnyRef(value))
+  }
+
+  def withValue(path: String, value: Int): WorkerConfig = {
+    withValue(path, ConfigValueFactory.fromAnyRef(value.asInstanceOf[java.lang.Integer]))
+  }
+
+  def withValue(path: String, value: Boolean): WorkerConfig = {
+    withValue(path, ConfigValueFactory.fromAnyRef(value.asInstanceOf[java.lang.Boolean]))
+  }
+
+  def withValue(path: String, value: Double): WorkerConfig = {
+    withValue(path, ConfigValueFactory.fromAnyRef(value.asInstanceOf[java.lang.Double]))
+  }
 }

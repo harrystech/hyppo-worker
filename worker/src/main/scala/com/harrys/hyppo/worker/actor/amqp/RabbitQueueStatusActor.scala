@@ -1,6 +1,9 @@
 package com.harrys.hyppo.worker.actor.amqp
 
+import javax.inject.Inject
+
 import akka.actor.{Actor, ActorLogging, ActorRef, Terminated}
+import com.google.inject.assistedinject.Assisted
 import com.harrys.hyppo.config.WorkerConfig
 
 import scala.concurrent._
@@ -15,9 +18,19 @@ object RabbitQueueStatusActor {
   final case class QueueStatusUpdate(statuses: Seq[SingleQueueDetails])
   //  Used to provide partial updates about queue status after a dequeue event
   final case class PartialStatusUpdate(name: String, size: Int)
+
+  trait Factory {
+    def apply(@Assisted("delegator") delegator: ActorRef): Actor
+  }
 }
 
-final class RabbitQueueStatusActor(config: WorkerConfig, delegator: ActorRef) extends Actor with ActorLogging {
+final class RabbitQueueStatusActor @Inject()
+(
+  config: WorkerConfig,
+  naming: QueueNaming,
+  httpClient: RabbitHttpClient,
+  @Assisted("delegator") delegator: ActorRef
+) extends Actor with ActorLogging {
   import RabbitQueueStatusActor._
 
   //  Bring the actor system threadpool into scope
@@ -26,16 +39,11 @@ final class RabbitQueueStatusActor(config: WorkerConfig, delegator: ActorRef) ex
   //  Establish a death-pact with the delegator
   context.watch(delegator)
 
-  val naming = new QueueNaming(config)
-
   //  Used internally by a timer event to trigger refreshes of the queue status info
   private case object RefreshQueueStatsEvent
 
   //  Schedule a recurring refresh of the queue status info
   val statusTimer = context.system.scheduler.schedule(Duration.Zero, config.taskPollingInterval, self, RefreshQueueStatsEvent)
-
-  //  Create a RabbitMQ http client
-  val httpClient = config.newRabbitMQApiClient()
 
   override def postStop() : Unit = {
     statusTimer.cancel()
@@ -47,7 +55,7 @@ final class RabbitQueueStatusActor(config: WorkerConfig, delegator: ActorRef) ex
         val statuses = blocking {
           httpClient.fetchRawHyppoQueueDetails()
         }
-        QueueStatusUpdate(statuses.filter(s => naming.isIntegrationQueueName(s.queueName)))
+        QueueStatusUpdate(statuses.filter(s => naming.belongsToHyppo(s.queueName)))
       }).onComplete({
         case Success(update) =>
           log.debug(s"Sending queue status update: ${ update }")

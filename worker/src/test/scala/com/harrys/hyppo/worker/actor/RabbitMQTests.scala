@@ -18,7 +18,12 @@ import scala.util.Try
 /**
  * Created by jpetty on 9/16/15.
  */
-abstract class RabbitMQTests[T <: HyppoConfig](systemName: String, final val config: T) extends TestKit(ActorSystem(systemName, config.underlying)) with WordSpecLike with BeforeAndAfterAll with Matchers with ImplicitSender {
+abstract class RabbitMQTests[T <: HyppoConfig](systemName: String, final val config: T)
+  extends TestKit(ActorSystem(systemName, config.underlying))
+    with WordSpecLike
+    with BeforeAndAfterAll
+    with Matchers
+    with ImplicitSender {
 
   override final def afterAll() : Unit = {
     try {
@@ -39,8 +44,8 @@ abstract class RabbitMQTests[T <: HyppoConfig](systemName: String, final val con
 
   def localTestCleanup() : Unit = {}
 
-  final val connection      = config.rabbitMQConnectionFactory.newConnection()
-  final val connectionActor = TestActorRef(ConnectionActor.props(new ConnectionFactory {
+  final val connection        = config.rabbitMQConnectionFactory.newConnection()
+  final val connectionActor   = TestActorRef(ConnectionActor.props(new ConnectionFactory {
     override def newConnection() : Connection = connection
   }))
 

@@ -1,8 +1,12 @@
 package com.harrys.hyppo.worker.actor
 
+import javax.inject.Inject
+
 import akka.actor._
 import akka.pattern.gracefulStop
 import akka.util.Timeout
+import com.google.inject.assistedinject.Assisted
+import com.google.inject.{Injector, Provider}
 import com.harrys.hyppo.Lifecycle
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.worker.actor.WorkerFSM._
@@ -12,6 +16,7 @@ import com.harrys.hyppo.worker.api.code.ExecutableIntegration
 import com.harrys.hyppo.worker.api.proto.{GeneralWorkerInput, IntegrationWorkerInput}
 import com.harrys.hyppo.worker.data.{JarLoadingActor, LoadedJarFile}
 import com.rabbitmq.client.{ShutdownListener, ShutdownSignalException}
+import com.sandinh.akuice.ActorInject
 import com.thenewmotion.akka.rabbitmq._
 import org.apache.commons.io.{FileUtils, FilenameUtils}
 
@@ -23,9 +28,19 @@ import scala.util.Failure
 /**
  * Created by jpetty on 10/30/15.
  */
-final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: ActorRef, jarLoadingActor: ActorRef) extends LoggingFSM[WorkerState, CommanderState] {
+final class WorkerFSM @Inject()
+(
+  injectorProvider:       Provider[Injector],
+  config:                 WorkerConfig,
+  commanderFactory:       CommanderActor.Factory,
+  taskFSMFactory:         TaskFSM.Factory,
+  @Assisted("delegator")  delegator:    ActorRef,
+  @Assisted("connection") connection:   ActorRef
+) extends LoggingFSM[WorkerState, CommanderState] with ActorInject {
 
-  context.watch(jarLoadingActor)
+  override protected def injector: Injector = injectorProvider.get()
+
+  val jarLoadingActor = injectActor[JarLoadingActor]("jar-loader")
 
   val channelActor    = {
     implicit val timeout = Timeout(config.rabbitMQTimeout)
@@ -245,13 +260,13 @@ final class WorkerFSM(config: WorkerConfig, delegator: ActorRef, connection: Act
 
   private var commanderCounter = 0
 
-  def createTaskActor(item: WorkQueueExecution, commander: ActorRef) : ActorRef = {
-    context.watch(context.actorOf(Props(classOf[TaskFSM], config, item, commander), name = "task-" + item.input.executionId.toString))
+  def createTaskActor(execution: WorkQueueExecution, commander: ActorRef): ActorRef = {
+    context.watch(injectActor(taskFSMFactory(execution, commander), name = "task-" + execution.input.executionId.toString))
   }
 
   def createCommanderActor(execution: WorkQueueExecution, jarFiles: Seq[LoadedJarFile]) : ActiveCommander = {
     commanderCounter += 1
-    val commander = context.watch(context.actorOf(Props(classOf[CommanderActor], config, execution.input.code, jarFiles), name = "commander-" + commanderCounter))
+    val commander = context.watch(injectActor(commanderFactory(execution.input.code, jarFiles), name = "commander-" + commanderCounter))
     val taskActor = createTaskActor(execution, commander)
     execution.input match {
       case work: IntegrationWorkerInput =>
@@ -316,4 +331,9 @@ object WorkerFSM {
     * Objected used by the [[WorkerFSM]] to indicate that work polling should be attempted
     */
   case object RequestWorkEvent
+
+
+  trait Factory {
+    def apply(@Assisted("delegator") delegator: ActorRef, @Assisted("connection") connection: ActorRef): WorkerFSM
+  }
 }

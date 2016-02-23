@@ -16,6 +16,7 @@ sealed trait QueueDetails extends Product { self =>
   def unacknowledged: Int
   def idleSince: LocalDateTime
   final def isEmpty: Boolean = size <= 0
+  final def hasWork: Boolean = ready >= 1
   final def estimatedCompletionTime: Duration = {
     if (isEmpty){
       Duration.Zero
@@ -28,10 +29,6 @@ sealed trait QueueDetails extends Product { self =>
       }
     }
   }
-
-  override def toString: String = {
-    s"${self.productPrefix}(size=$size rate=$rate ready=$ready unacked=$unacknowledged idleSince=$idleSince)"
-  }
 }
 
 final case class SingleQueueDetails
@@ -42,7 +39,12 @@ final case class SingleQueueDetails
   override val ready: Int,
   override val unacknowledged: Int,
   override val idleSince: LocalDateTime
-) extends QueueDetails
+) extends QueueDetails {
+
+  override def toString: String = {
+    s"$productPrefix(queueName=$queueName size=$size rate=$rate ready=$ready unacked=$unacknowledged idleSince=$idleSince)"
+  }
+}
 
 
 final case class MultiQueueDetails
@@ -83,5 +85,9 @@ final case class MultiQueueDetails
       implicit val order = Ordering.fromLessThan[LocalDateTime]((one, two) => one.isBefore(two))
       queues.map(_.idleSince).min
     }
+  }
+
+  override def toString: String = {
+    s"$productPrefix(queues={${ queues.map(_.queueName).mkString(", ") }} size=$size rate=$rate ready=$ready unacked=$unacknowledged idleSince=$idleSince)"
   }
 }

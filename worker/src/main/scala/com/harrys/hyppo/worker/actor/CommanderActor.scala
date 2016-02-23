@@ -3,8 +3,10 @@ package com.harrys.hyppo.worker.actor
 import java.io.File
 import java.net.{InetAddress, ServerSocket}
 import java.util.concurrent.TimeoutException
+import javax.inject.Inject
 
 import akka.actor.{Actor, ActorLogging, ActorRef}
+import com.google.inject.assistedinject.Assisted
 import com.harrys.hyppo.config.WorkerConfig
 import com.harrys.hyppo.executor.cli.ExecutorMain
 import com.harrys.hyppo.executor.proto.com._
@@ -13,7 +15,7 @@ import com.harrys.hyppo.source.api.model.{DataIngestionJob, TaskAssociations}
 import com.harrys.hyppo.worker.actor.task.TaskFSMEvent
 import com.harrys.hyppo.worker.api.code.{IntegrationCode, IntegrationSchema}
 import com.harrys.hyppo.worker.api.proto._
-import com.harrys.hyppo.worker.data.{DataHandler, LoadedJarFile, TempFilePool}
+import com.harrys.hyppo.worker.data.{DataFileHandler, LoadedJarFile, TempFilePool}
 import com.harrys.hyppo.worker.proc.{CommandExecutionException, CommandOutput, ExecutorException, SimpleCommander}
 
 import scala.collection.JavaConversions
@@ -25,11 +27,12 @@ import scala.util.{Failure, Success, Try}
 /**
  * Created by jpetty on 10/29/15.
  */
-class CommanderActor
+class CommanderActor @Inject()
 (
-  config:       WorkerConfig,
-  integration:  IntegrationCode,
-  jarFiles:     Seq[LoadedJarFile]
+  config:                 WorkerConfig,
+  dataHandlerFactory:     DataFileHandler.Factory,
+  @Assisted("integration") integration:  IntegrationCode,
+  @Assisted("jarFiles")    jarFiles:     Seq[LoadedJarFile]
 ) extends Actor with ActorLogging {
 
   import context.dispatcher
@@ -51,7 +54,7 @@ class CommanderActor
   }
 
   val tempFiles   = new TempFilePool(simpleCommander.executor.files.workingDirectory.toPath)
-  val dataHandler = new DataHandler(config, tempFiles)
+  val dataHandler = dataHandlerFactory(tempFiles)
 
   //  Easier access to executor STDOUT / STDERR streams on disk
   def standardErrorContents: String = Source.fromFile(simpleCommander.executor.files.standardErrorFile).mkString
@@ -77,6 +80,7 @@ class CommanderActor
       } else {
         isRunningWork = false
         simpleCommander.executor.files.cleanupLogs()
+        tempFiles.cleanAll()
         log.debug("Commander is now available")
       }
 
@@ -315,5 +319,11 @@ class CommanderActor
     if (integration.jarFiles != codeKeys){
       throw new IllegalStateException(s"Commander received jar file mismatch for $integration with jars: ${ codeKeys.mkString(", ") }")
     }
+  }
+}
+
+object CommanderActor {
+  trait Factory {
+    def apply(@Assisted("integration") integration: IntegrationCode, @Assisted("jarFiles") jarFiles: Seq[LoadedJarFile]): CommanderActor
   }
 }

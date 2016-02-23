@@ -52,7 +52,7 @@ object WorkerMain {
       }
     }))
     //  Instantiate the workers and start processing
-    val worker = new HyppoWorker(system, config)
+    val worker = HyppoWorker(system, config)
     worker.awaitSystemTermination()
   }
 }

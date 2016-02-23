@@ -1,29 +1,45 @@
 package com.harrys.hyppo.worker.actor.queue
 
-import akka.actor._
+import javax.inject.Inject
+
+import akka.actor.{Actor, ActorLogging, ActorRef}
+import com.google.inject.{Injector, Provider}
 import com.harrys.hyppo.Lifecycle
 import com.harrys.hyppo.config.WorkerConfig
-import com.harrys.hyppo.util.TimeUtils
 import com.harrys.hyppo.worker.actor.amqp._
 import com.harrys.hyppo.worker.actor.{RequestForAnyWork, RequestForPreferredWork, RequestForWork}
-import com.harrys.hyppo.worker.api.proto.WorkerInput
+import com.harrys.hyppo.worker.api.proto.{WorkResource, WorkerInput}
+import com.harrys.hyppo.worker.scheduling.DelegationStrategy
+import com.rabbitmq.client.Channel
+import com.sandinh.akuice.ActorInject
 import com.thenewmotion.akka.rabbitmq._
 
 import scala.annotation.tailrec
-import scala.util.Random
 
 /**
-  * Created by jpetty on 11/6/15.
+  * Created by jpetty on 2/12/16.
   */
-final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging {
+final class WorkDelegation @Inject()
+(
+  injectorProvider:   Provider[Injector],
+  val config:         WorkerConfig,
+  val statusTracker:  QueueMetricsTracker,
+  val strategy:       DelegationStrategy,
+  statusPollingActorFactory: RabbitQueueStatusActor.Factory
+) extends Actor with ActorLogging with ActorInject {
+
+  override def injector: Injector = injectorProvider.get()
+
   //  Helper objects for dealing with queues
   val serializer    = new AMQPSerialization(config.secretKey)
-  val naming        = new QueueNaming(config)
-  val helpers       = new QueueHelpers(config, naming)
-  val resources     = new ResourceLeasing
-  //  The current known information about the queues, updated via assignment once fetched
-  var currentStats  = Map[String, SingleQueueDetails]()
+  val leasing       = new ResourceLeasing()
 
+  //  Actor that sends status update events
+  val statusActor   = injectActor(statusPollingActorFactory(self), "queue-status")
+
+  //  Pinged back from the worker channel when the acquisition fails. This is to avoid concurrency race conditions
+  //  since resource leasing happens inside the worker channel's thread and not necessarily the delegation thread.
+  private final case class ResourceStatusSync(queue: String, resources: Seq[WorkResource], failed: Option[WorkResource])
 
   def shutdownImminent: Receive = {
     case request: RequestForWork =>
@@ -32,104 +48,79 @@ final class WorkDelegation(config: WorkerConfig) extends Actor with ActorLogging
 
   override def receive: Receive = {
     case RequestForPreferredWork(channelActor, prefer) =>
-      val worker  = sender()
-      val filter  = naming.belongsToIntegration(prefer) _
-      val base    = List(naming.generalQueueName) ++ integrationQueueOrder.map(_.queueName)
-      //  Moves all queues belong to this integration to the front of the list
-      val (head, tail) = base.partition(name => filter(name))
-      val queues  = head ++ tail
-      channelActor ! ChannelMessage(c => delegateWorkFromQueues(c, worker, queues))
+      val worker   = sender()
+      val ordering = strategy.priorityOrderWithPreference(prefer, statusTracker.generalQueueMetrics(), statusTracker.integrationQueueMetrics())
+      if (ordering.hasNext) {
+        channelActor ! ChannelMessage(c => performDelegationSequence(c, worker, ordering))
+      } else {
+        log.debug("No work is currently available in any queue. Ignoring request from {} with work preference {}", worker, prefer.printableName)
+      }
 
     case RequestForAnyWork(channelActor) =>
-      val worker  = sender()
-      val queues  = List(naming.generalQueueName) ++ integrationQueueOrder.map(_.queueName)
-      channelActor ! ChannelMessage(c => delegateWorkFromQueues(c, worker, queues))
-
-    case RabbitQueueStatusActor.QueueStatusUpdate(update) =>
-      log.debug("Received new full queue status update")
-      currentStats = update.map(i => i.queueName -> i).toMap
-
-    case RabbitQueueStatusActor.PartialStatusUpdate(name, size) =>
-      if (naming.isIntegrationQueueName(name)) {
-        log.debug(s"Performing incremental update for queue $name to size $size")
-        currentStats.get(name) match {
-          case Some(info) =>
-            currentStats += name -> info.copy(size = size)
-          case None =>
-            currentStats += name -> SingleQueueDetails(queueName = name, size = size, ready = size, rate = 0.0, unacknowledged = 0, idleSince = TimeUtils.currentLocalDateTime())
-        }
+      val worker   = sender()
+      val ordering = strategy.priorityOrderWithoutAffinity(statusTracker.generalQueueMetrics(), statusTracker.integrationQueueMetrics())
+      if (ordering.hasNext) {
+        channelActor ! ChannelMessage(c => performDelegationSequence(c, worker, ordering))
+      } else {
+        log.debug("No work is currently available in any queue. Ignoring request from {} with no work preference", worker)
       }
+
+    case update: RabbitQueueStatusActor.QueueStatusUpdate =>
+      log.debug(s"Received new full queue status update containing {} queues", update.statuses.size)
+      statusTracker.handleStatusUpdate(update)
+
+    case partial: RabbitQueueStatusActor.PartialStatusUpdate =>
+      log.debug(s"Received incremental queue status update for {} to size {}", partial.name, partial.size)
+      statusTracker.handleStatusUpdate(partial)
+
+    case ResourceStatusSync(queue, resources, Some(failed)) =>
+      log.debug("Failed to acquire resource {} for work queue {}", failed.inspect, queue)
+      statusTracker.resourceAcquisitionFailed(queue, resources, failed)
+
+    case ResourceStatusSync(queue, resources, None) =>
+      if (resources.nonEmpty){
+        log.debug("Successfully acquired resources {} for work queue {}", resources.view.map(_.resourceName).mkString(", "), queue)
+      }
+      statusTracker.resourcesAcquiredSuccessfully(queue, resources)
 
     case Lifecycle.ImpendingShutdown =>
       log.info("Shutdown is imminent. Ceasing work delegation")
+      context.stop(statusActor)
       context.become(shutdownImminent, discardOld = false)
   }
 
-  def delegateWorkFromQueues(channel: Channel, worker: ActorRef, queues: List[String]) : Unit = {
-    try {
-      createExecutionItem(channel, worker, queues) match {
-        case None =>
-          log.debug("Failed to identify any valid work items for worker")
-        case Some(execution) =>
-          log.debug(s"Successfully acquired task execution: ${ execution.input.summaryString }")
-          worker ! execution
-      }
-    } catch {
-      case e: Exception =>
-        log.error(e, "Failed to create work for worker execution")
-        throw e
-    }
-  }
 
   @tailrec
-  def createExecutionItem(channel: Channel, worker: ActorRef, queues: List[String]) : Option[WorkQueueExecution] = {
-    if (queues.isEmpty){
-      None
-    } else {
-      dequeueWithoutAck(channel, queues.head) match {
-        case None       => createExecutionItem(channel, worker, queues.tail)
-        case Some(item) =>
-          log.debug(s"Found work queue item: ${ item.input.summaryString }")
-          resources.leaseResources(channel, item.input.resources) match {
-            case Left(leases) =>
-              Some(WorkQueueExecution(channel, item.headers, item.input, leases))
-            case Right(ResourceUnavailable(unavailable)) =>
-              log.info(s"Unable to acquire ${ unavailable.inspect } to perform ${ item.input.summaryString }. Sending back to queue.")
-              channel.basicReject(item.headers.deliveryTag, true)
-              createExecutionItem(channel, worker, queues.tail)
-          }
+  def performDelegationSequence(channel: Channel, worker: ActorRef, checkOrdering: Iterator[SingleQueueDetails]): Unit = {
+    if (checkOrdering.hasNext) {
+      val queue = checkOrdering.next()
+      tryExecutionAcquisition(channel, worker, queue) match {
+        case Some(execution) =>
+          log.debug("Successfully acquired task execution {} for worker {}", execution.input.summaryString, worker)
+          worker ! execution
+        case None => performDelegationSequence(channel, worker, checkOrdering)
       }
     }
   }
 
-  def integrationQueueOrder: List[SingleQueueDetails] = {
-    val groupings = nonEmptyIntegrationQueueGroups()
-    if (groupings.isEmpty){
-      List()
-    } else {
-      val timeOrdering = groupings.sortBy(- _.estimatedCompletionTime)
-      val longestTime  = timeOrdering.head.estimatedCompletionTime
-      val (ties, tail) = timeOrdering.partition(_.estimatedCompletionTime == longestTime)
-      val finalOrder   = (ties.sortBy(- _.size) ++ tail).toList
-      finalOrder.flatMap {
-        case single: SingleQueueDetails => List(single)
-        case multi:  MultiQueueDetails  => Random.shuffle(multi.queues).toList
+  def tryExecutionAcquisition(channel: Channel, worker: ActorRef, queue: SingleQueueDetails): Option[WorkQueueExecution] = {
+    dequeueWithoutAck(channel, queue.queueName).flatMap { item =>
+      leasing.leaseResources(channel, item.input.resources) match {
+        case Left(leases) =>
+          val execution = WorkQueueExecution(channel, item.headers, item.input, leases)
+          self ! ResourceStatusSync(queue.queueName, item.input.resources, None)
+          Some(execution)
+        case Right(ResourceUnavailable(unavailable)) =>
+          log.info("Unable to acquire {} to perform {}. Sending back to queue.", unavailable.inspect, item.input.summaryString)
+          self ! ResourceStatusSync(queue.queueName, item.input.resources, Some(unavailable))
+          channel.basicReject(item.headers.deliveryTag, true)
+          None
       }
     }
   }
 
-  def nonEmptyIntegrationQueueGroups() : Seq[QueueDetails] = {
-    val integrations = currentStats.values.filter(info => {
-      naming.isIntegrationQueueName(info.queueName)
-    })
-    val queueGroups  = naming.toLogicalQueueDetails(integrations)
-    queueGroups.filterNot(_.isEmpty).map {
-      case single: SingleQueueDetails => single
-      case group: MultiQueueDetails   => group.nonEmptyQueues
-    }
-  }
 
-  def dequeueWithoutAck(channel: Channel, queueName: String) : Option[WorkQueueItem] = {
+  def dequeueWithoutAck(channel: Channel, queueName: String): Option[WorkQueueItem] = {
     val response = channel.basicGet(queueName, false)
     if (response == null){
       self ! RabbitQueueStatusActor.PartialStatusUpdate(queueName, 0)

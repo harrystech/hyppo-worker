@@ -24,8 +24,9 @@ final class QueueNaming(config: HyppoConfig) {
 
   val expiredQueueName: String = s"$prefix.expired"
 
+  private val ownershipPrefix = s"$prefix."
   def belongsToHyppo(queueName: String) : Boolean = {
-    queueName.startsWith(prefix)
+    queueName != null && queueName.startsWith(ownershipPrefix)
   }
 
   def integrationWorkQueueName(input: IntegrationWorkerInput) : String = {
@@ -42,18 +43,22 @@ final class QueueNaming(config: HyppoConfig) {
   }
 
   private val integrationPrefix: String = s"$prefix.integration"
-  private def integrationQueueBaseName(integration: ExecutableIntegration) : String = {
+  private def integrationQueueBaseName(integration: ExecutableIntegration): String = {
     val sourceFix = sanitizeIntegrationName(integration.sourceName)
     val version   = s"v-${integration.details.versionNumber}"
     s"$integrationPrefix.$sourceFix-$version"
   }
 
-  def isIntegrationQueueName(name: String) : Boolean = {
+  def isWorkQueue(name: String): Boolean = {
+    generalQueueName == name || isIntegrationQueueName(name)
+  }
+
+  def isIntegrationQueueName(name: String): Boolean = {
     name.startsWith(integrationPrefix)
   }
 
   private val logicalBaseRegex = s"""$integrationPrefix\\.([^\\.]+).*""".r
-  def toLogicalQueueDetails(details: Iterable[SingleQueueDetails]) : Seq[QueueDetails] = {
+  def toLogicalQueueDetails(details: Iterable[SingleQueueDetails]): Seq[QueueDetails] = {
     val valueGroups = details.groupBy { single =>
       single.queueName match {
         case logicalBaseRegex(group) => group

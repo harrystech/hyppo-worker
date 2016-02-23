@@ -2,36 +2,30 @@ package com.harrys.hyppo.worker.actor.data
 
 import java.io.File
 import java.nio.file.Files
+import javax.inject.Inject
 
-import akka.actor.Actor
+import com.google.inject.assistedinject.Assisted
 import com.harrys.hyppo.worker.api.proto.RemoteStorageLocation
-import com.harrys.hyppo.worker.data.LoadedJarFile
-import com.harrys.hyppo.worker.data.JarLoadingActor.{JarsResult, LoadJars}
-import org.apache.commons.io.{FileDeleteStrategy, FileCleaningTracker, FileUtils, FilenameUtils}
+import com.harrys.hyppo.worker.data.{JarFileLoader, LoadedJarFile}
+import org.apache.commons.io.{FileCleaningTracker, FileDeleteStrategy, FileUtils, FilenameUtils}
+
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
-  * Created by jpetty on 2/8/16.
+  * Created by jpetty on 2/9/16.
   */
-final class LocalJarLoadingActor extends Actor {
+class LocalJarFileLoader @Inject() (implicit @Assisted ec: ExecutionContext) extends JarFileLoader {
 
   private val tracker = new FileCleaningTracker()
 
-  override def postStop(): Unit = {
+  override def shutdown(): Unit = {
     tracker.exitWhenFinished()
-    System.gc()
   }
 
-  override def receive: Receive = {
-    case LoadJars(jars) =>
-      val result = jars.map(copyLocalClasspathEntry)
-      sender() ! JarsResult(result)
+  override def loadJarFile(jar: RemoteStorageLocation): Future[LoadedJarFile] = {
+    val loaded = LoadedJarFile(jar, createTrackedLocalCopy(jar))
+    Future.successful(loaded)
   }
-
-  private def copyLocalClasspathEntry(remote: RemoteStorageLocation): LoadedJarFile = {
-    val copied = createTrackedLocalCopy(remote)
-    LoadedJarFile(remote, copied)
-  }
-
 
   private def createTrackedLocalCopy(remote: RemoteStorageLocation): File = {
     val sourceFile = new File(remote.key)
