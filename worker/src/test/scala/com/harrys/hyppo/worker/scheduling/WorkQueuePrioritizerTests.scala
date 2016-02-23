@@ -49,7 +49,7 @@ class WorkQueuePrioritizerTests extends PropSpec with Matchers with GeneratorDri
     IdleSinceMinuteOrdering
   )
 
-  val unstableOrdering = Seq[PriorityOrdering](ShufflePriorityOrdering)
+  val unstableOrdering = Seq[PriorityOrdering](ShuffleOrdering)
 
   val stableOrderingGen: Gen[List[PriorityOrdering]] = Gen.nonEmptyListOf(Gen.oneOf(stableOrderings))
 

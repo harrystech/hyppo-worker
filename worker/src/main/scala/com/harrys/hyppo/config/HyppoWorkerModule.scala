@@ -67,7 +67,7 @@ class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) exte
       ExpectedCompletionOrdering,
       IdleSinceMinuteOrdering,
       AbsoluteSizeOrdering,
-      ShufflePriorityOrdering
+      ShuffleOrdering
     )
   }
 

@@ -77,7 +77,7 @@ final class DefaultQueueMetricsTracker @Inject()
       val details = queues(update.name).details
       if (details.size != update.size) {
         val ready = Math.min(update.size, details.ready)
-        val unack = Math.min(update.size, details.unacknowledged)
+        val unack = Math.min(update.size - ready, details.unacknowledged)
         updateWithDetails(update.name, details.copy(size = update.size, ready = ready, unacknowledged = unack))
       }
     } else {

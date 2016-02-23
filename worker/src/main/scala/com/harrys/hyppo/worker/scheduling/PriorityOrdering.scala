@@ -43,7 +43,7 @@ case object AbsoluteSizeOrdering extends PriorityOrdering {
   override def toString: String = this.productPrefix
 }
 
-case object ShufflePriorityOrdering extends PriorityOrdering {
+case object ShuffleOrdering extends PriorityOrdering {
   override def compare(x: SingleQueueDetails, y: SingleQueueDetails): Int = Random.nextInt(3) - 1
   override def toString: String = this.productPrefix
 }

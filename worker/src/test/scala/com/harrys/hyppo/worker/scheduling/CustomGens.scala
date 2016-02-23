@@ -30,7 +30,7 @@ object CustomGens {
       AbsoluteSizeOrdering,
       IdleSinceMinuteOrdering
     )
-    val unstableOrdering = Seq[PriorityOrdering](ShufflePriorityOrdering)
+    val unstableOrdering = Seq[PriorityOrdering](ShuffleOrdering)
 
     Gen.nonEmptyListOf(Gen.oneOf(stableOrderings)).flatMap { stable =>
       Gen.listOf(Gen.oneOf(unstableOrdering)).map { unstable =>
