@@ -66,9 +66,7 @@ final class WorkDelegation @Inject()
       }
 
     case update: RabbitQueueStatusActor.QueueStatusUpdate =>
-      if (update.statuses.nonEmpty){
-        log.debug(s"Received new full queue status update for queues: {}", update.statuses.map(_.queueName).mkString(", "))
-      }
+      log.debug(s"Received new full queue status update containing {} queues", update.statuses.size)
       statusTracker.handleStatusUpdate(update)
 
     case partial: RabbitQueueStatusActor.PartialStatusUpdate =>
