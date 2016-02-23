@@ -93,7 +93,7 @@ final class DefaultDelegationStrategy @Inject()
           ignore += metrics.resource
           false
         } else {
-          val threshold = computeAllowanceThreshold(metrics, waitedTime)
+          val threshold = computeAllowanceThreshold(waitedTime)
           val randomVal = random.nextDouble()
           if (randomVal <= threshold) {
             log.trace(s"Allowing work dependent on ${ metrics.resource } based on probabilistic backoff. Threshold $threshold >= $randomVal")
@@ -107,9 +107,9 @@ final class DefaultDelegationStrategy @Inject()
         }
     }
 
-    private def computeAllowanceThreshold(metrics: ResourceQueueMetrics, timeSinceContention: Duration): Double = {
+    private def computeAllowanceThreshold(timeSinceContention: Duration): Double = {
       val seconds = timeSinceContention.getSeconds.toInt
-      val delay   = (metrics.details.rate + 1.0) * config.resourceBackoffMinDelay.getSeconds.toDouble
+      val delay   = config.resourceBackoffMinDelay.getSeconds.toDouble
       Sigmoid.gompertzCurveBackoffFactor(seconds, config.resourceBackoffScaleFactor, delay)
     }
   }
