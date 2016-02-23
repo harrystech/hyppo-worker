@@ -45,17 +45,17 @@ final class WorkerConfig(config: Config) extends HyppoConfig(config) {
 
   val uploadLogTimeout: FiniteDuration = Duration(config.getDuration("hyppo.worker.upload-log-timeout").toMillis, MILLISECONDS)
 
-  val resourceBackoffFactor = config.getDouble("hyppo.worker.resource-throttle.backoff-factor")
-  if (resourceBackoffFactor <= 0.0) {
-    throw new IllegalArgumentException(s"hyppo.worker.resource-throttle.backoff-factor must be > 0.0. Found: $resourceBackoffFactor")
+  val resourceBackoffScaleFactor = config.getDouble("hyppo.worker.resource-throttle.backoff-scale-factor")
+  if (resourceBackoffScaleFactor <= 0.0) {
+    throw new IllegalArgumentException(s"hyppo.worker.resource-throttle.backoff-scale-factor must be > 0.0. Found: $resourceBackoffScaleFactor")
   }
 
-  val resourceBackoffMinValue = config.getDouble("hyppo.worker.resource-throttle.backoff-min-value")
-  if (resourceBackoffMinValue < 0.0) {
-    throw new IllegalArgumentException(s"hyppo.worker.resource-throttle.backoff-min-value must be >= 0.0. Found: $resourceBackoffMinValue")
+  val resourceBackoffMinDelay = config.getDuration("hyppo.worker.resource-throttle.backoff-min-delay")
+  if (resourceBackoffMinDelay.isZero || resourceBackoffMinDelay.isNegative) {
+    throw new IllegalArgumentException(s"hyppo.worker.resource-throttle.backoff-min-delay must be > 0. Found: $resourceBackoffMinDelay")
   }
 
-  val resourceBackoffMaxValue: FiniteDuration = Duration(config.getDuration("hyppo.worker.resource-throttle.backoff-min-value").toMillis, MILLISECONDS)
+  val resourceBackoffMaxValue: FiniteDuration = Duration(config.getDuration("hyppo.worker.resource-throttle.backoff-max-wait").toMillis, MILLISECONDS)
 
   def newExecutorSetup(): ExecutorSetup = defaultSetup.clone()
 

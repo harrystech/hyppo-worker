@@ -66,7 +66,9 @@ final class WorkDelegation @Inject()
       }
 
     case update: RabbitQueueStatusActor.QueueStatusUpdate =>
-      log.debug("Received new full queue status update")
+      if (update.statuses.nonEmpty){
+        log.debug(s"Received new full queue status update for queues: {}", update.statuses.map(_.queueName).mkString(", "))
+      }
       statusTracker.handleStatusUpdate(update)
 
     case partial: RabbitQueueStatusActor.PartialStatusUpdate =>
@@ -78,7 +80,9 @@ final class WorkDelegation @Inject()
       statusTracker.resourceAcquisitionFailed(queue, resources, failed)
 
     case ResourceStatusSync(queue, resources, None) =>
-      log.debug("Successfully acquired resources {} for work queue {}", resources.view.map(_.resourceName).mkString(", "), queue)
+      if (resources.nonEmpty){
+        log.debug("Successfully acquired resources {} for work queue {}", resources.view.map(_.resourceName).mkString(", "), queue)
+      }
       statusTracker.resourcesAcquiredSuccessfully(queue, resources)
 
     case Lifecycle.ImpendingShutdown =>

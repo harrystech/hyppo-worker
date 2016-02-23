@@ -1,6 +1,6 @@
 package com.harrys.hyppo.worker.scheduling
 
-import java.time.{Duration, Instant}
+import java.time.{Clock, Duration, Instant}
 import javax.inject.Inject
 
 import com.google.inject.ImplementedBy
@@ -52,7 +52,8 @@ final class DefaultDelegationStrategy @Inject()
   }
 
   private def filterAndPrioritize(input: Seq[WorkQueueMetrics]): Iterator[SingleQueueDetails] = {
-    val available = filterForResourceContention(input.filter(_.hasWork))
+    val withWork  = input.filter(_.hasWork)
+    val available = filterForResourceContention(withWork)
     workPrioritizer.prioritize(available.map(_.details))
   }
 
@@ -70,11 +71,15 @@ final class DefaultDelegationStrategy @Inject()
     private var ignore  = Set[WorkResource]()
 
     override def apply(metrics: WorkQueueMetrics): Boolean = {
-      val allowed = metrics.resources.forall(shouldAllowResource)
-      if (!allowed) {
-        log.debug(s"Rejecting work for queue ${ metrics.details.queueName } based on WorkResource contention")
+      if (metrics.resources.nonEmpty) {
+        val allowed = metrics.resources.forall(shouldAllowResource)
+        if (!allowed) {
+          log.debug(s"Rejecting work for queue ${ metrics.details.queueName } based on WorkResource contention")
+        }
+        allowed
+      } else {
+        true
       }
-      allowed
     }
 
     private def shouldAllowResource(metrics: ResourceQueueMetrics): Boolean = metrics.timeOfLastContention match {
@@ -82,22 +87,30 @@ final class DefaultDelegationStrategy @Inject()
       case Some(time) if attempt.contains(metrics.resource) => true
       case Some(time) if ignore.contains(metrics.resource)  => false
       case Some(time)  =>
-        val threshold = computeAllowanceThreshold(time)
-        val randomVal = random.nextDouble()
-        if (randomVal <= threshold) {
-          log.debug(s"Accepting work dependent on ${ metrics.resource } based on probabilistic backoff. Threshold $threshold >= $randomVal")
-          attempt += metrics.resource
-          true
-        } else {
-          log.debug(s"Ignoring work dependent on ${ metrics.resource } based on probabilistic backoff. Threshold $threshold < $randomVal")
+        val waitedTime = Duration.between(time, Instant.now(Clock.systemUTC()))
+        if (waitedTime.minus(config.resourceBackoffMinDelay).isNegative) {
+          log.debug(s"Ignoring any work dependent on ${ metrics.resource } based on minimum delay factor")
           ignore += metrics.resource
           false
+        } else {
+          val threshold = computeAllowanceThreshold(metrics, waitedTime)
+          val randomVal = random.nextDouble()
+          if (randomVal <= threshold) {
+            log.debug(s"Allowing work dependent on ${ metrics.resource } based on probabilistic backoff. Threshold $threshold >= $randomVal")
+            attempt += metrics.resource
+            true
+          } else {
+            log.debug(s"Ignoring any work dependent on ${ metrics.resource } based on probabilistic backoff. Threshold $threshold < $randomVal")
+            ignore += metrics.resource
+            false
+          }
         }
     }
 
-    private def computeAllowanceThreshold(timeOfContention: Instant): Double = {
-      val seconds = Duration.between(timeOfContention, Instant.now()).getSeconds.toInt
-      Sigmoid.gompertzCurveBackoffFactor(seconds, config.resourceBackoffFactor, config.resourceBackoffMinValue)
+    private def computeAllowanceThreshold(metrics: ResourceQueueMetrics, timeSinceContention: Duration): Double = {
+      val seconds = timeSinceContention.getSeconds.toInt
+      val delay   = (metrics.details.rate + 1.0) * config.resourceBackoffMinDelay.getSeconds.toDouble
+      Sigmoid.gompertzCurveBackoffFactor(seconds, config.resourceBackoffScaleFactor, delay)
     }
   }
 }

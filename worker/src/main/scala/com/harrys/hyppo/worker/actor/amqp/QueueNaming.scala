@@ -24,8 +24,9 @@ final class QueueNaming(config: HyppoConfig) {
 
   val expiredQueueName: String = s"$prefix.expired"
 
+  private val ownershipPrefix = s"$prefix."
   def belongsToHyppo(queueName: String) : Boolean = {
-    queueName.startsWith(prefix)
+    queueName != null && queueName.startsWith(ownershipPrefix)
   }
 
   def integrationWorkQueueName(input: IntegrationWorkerInput) : String = {
