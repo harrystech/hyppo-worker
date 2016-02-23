@@ -23,7 +23,7 @@ libraryDependencies ++= Seq(
   "com.google.inject" % "guice"         % GuiceVersion,       // Dependency injection
   "com.google.inject.extensions" % "guice-assistedinject" % GuiceVersion,
   "javax.inject"      % "javax.inject"  % "1",
-  "com.sandinh" %% "akka-guice" % "3.1.1" excludeAll(ExclusionRule(organization = "com.typesafe.akka"))
+  "com.sandinh" %% "akka-guice" % "3.1.1" excludeAll ExclusionRule(organization = "com.typesafe.akka")
 )
 
 mainClass in run := Some("com.harrys.hyppo.WorkerMain")
