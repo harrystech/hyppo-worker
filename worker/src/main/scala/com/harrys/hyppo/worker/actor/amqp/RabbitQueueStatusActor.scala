@@ -55,7 +55,7 @@ final class RabbitQueueStatusActor @Inject()
         val statuses = blocking {
           httpClient.fetchRawHyppoQueueDetails()
         }
-        QueueStatusUpdate(statuses.filter(s => naming.isIntegrationQueueName(s.queueName)))
+        QueueStatusUpdate(statuses.filter(s => naming.belongsToHyppo(s.queueName)))
       }).onComplete({
         case Success(update) =>
           log.debug(s"Sending queue status update: ${ update }")

@@ -58,20 +58,11 @@ object HyppoWorker {
   }
 
   def apply(system: ActorSystem, config: WorkerConfig): HyppoWorker = {
-    apply(system, config, Guice.createInjector(), new HyppoWorkerModule(system, config))
-  }
-
-  def apply(system: ActorSystem, config: WorkerConfig, injector: Injector): HyppoWorker = {
-    apply(system, config, injector, new HyppoWorkerModule(system, config))
+    apply(system, config, new HyppoWorkerModule(system, config))
   }
 
   def apply[M <: HyppoWorkerModule](system: ActorSystem, config: WorkerConfig, module: M): HyppoWorker = {
-    apply(system, config, Guice.createInjector(), module)
-  }
-
-  def apply[M <: HyppoWorkerModule](system: ActorSystem, config: WorkerConfig, injector: Injector, module: M): HyppoWorker = {
-    val child = injector.createChildInjector(module)
-    new HyppoWorker(system, config, child)
+    new HyppoWorker(system, config, Guice.createInjector(module))
   }
 
   def createConfig(appConfig: Config): WorkerConfig = {

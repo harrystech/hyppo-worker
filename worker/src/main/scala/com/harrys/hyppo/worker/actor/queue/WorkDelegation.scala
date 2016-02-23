@@ -78,7 +78,7 @@ final class WorkDelegation @Inject()
       statusTracker.resourceAcquisitionFailed(queue, resources, failed)
 
     case ResourceStatusSync(queue, resources, None) =>
-      log.debug("Successfully acquired resources {} for work queue {}", resources.view.map(_.resourceName))
+      log.debug("Successfully acquired resources {} for work queue {}", resources.view.map(_.resourceName).mkString(", "), queue)
       statusTracker.resourcesAcquiredSuccessfully(queue, resources)
 
     case Lifecycle.ImpendingShutdown =>
