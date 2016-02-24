@@ -14,8 +14,8 @@ exportJars := true
 //--
 
 libraryDependencies ++= Seq(
-  "com.novocode" % "junit-interface" % "0.11" % "test",
-  "commons-io" % "commons-io" % "2.4" % "test"
+  "com.novocode" % "junit-interface" % "0.11" % Test,
+  "commons-io" % "commons-io" % "2.4" % Test
 )
 
 //  Setup the J-Unit arguments for testing
