@@ -105,14 +105,15 @@ final class WorkDelegation @Inject()
 
   def tryExecutionAcquisition(channel: Channel, worker: ActorRef, queue: SingleQueueDetails): Option[WorkQueueExecution] = {
     dequeueWithoutAck(channel, queue.queueName).flatMap { item =>
-      leasing.leaseResources(channel, item.input.resources) match {
+      val resources = item.input.resources
+      leasing.leaseResources(channel, resources) match {
         case Left(leases) =>
+          self ! ResourceStatusSync(queue.queueName, resources, None)
           val execution = WorkQueueExecution(channel, item.headers, item.input, leases)
-          self ! ResourceStatusSync(queue.queueName, item.input.resources, None)
           Some(execution)
         case Right(ResourceUnavailable(unavailable)) =>
-          log.info("Unable to acquire {} to perform {}. Sending back to queue.", unavailable.inspect, item.input.summaryString)
-          self ! ResourceStatusSync(queue.queueName, item.input.resources, Some(unavailable))
+          log.debug("Unable to acquire {} to perform {}. Sending back to queue.", unavailable.inspect, item.input.summaryString)
+          self ! ResourceStatusSync(queue.queueName, resources, Some(unavailable))
           channel.basicReject(item.headers.deliveryTag, true)
           None
       }

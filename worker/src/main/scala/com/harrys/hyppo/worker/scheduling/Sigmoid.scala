@@ -24,7 +24,7 @@ object Sigmoid {
       throw new IllegalArgumentException(s"The scaleFactor and delayFactor must be greater than 0. Received scaleFactor: $scaleFactor delayFactor: $delayFactor")
     }
     val ct = scaleFactor * seconds
-    val be = Math.pow(Math.E, -ct)
+    val be = delayFactor * Math.pow(Math.E, -ct)
     Math.pow(Math.E, -be)
   }
 }
