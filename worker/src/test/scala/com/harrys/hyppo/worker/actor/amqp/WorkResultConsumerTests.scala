@@ -1,15 +1,10 @@
 package com.harrys.hyppo.worker.actor.amqp
 
-import akka.actor.ActorSystem
 import akka.pattern.gracefulStop
 import akka.testkit.TestActorRef
-import com.google.inject.{AbstractModule, Guice}
 import com.harrys.hyppo.Lifecycle
-import com.harrys.hyppo.config.{CoordinatorConfig, HyppoCoordinatorModule}
-import com.harrys.hyppo.coordinator.{CoordinatorLocalTestModule, WorkResponseHandler}
 import com.harrys.hyppo.worker.TestConfig
 import com.harrys.hyppo.worker.actor.RabbitMQTests
-import com.harrys.hyppo.worker.api.proto._
 import org.scalatest.concurrent.Eventually
 
 import scala.concurrent.Await

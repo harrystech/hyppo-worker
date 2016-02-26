@@ -26,8 +26,8 @@ object RabbitQueueStatusActor {
 
 final class RabbitQueueStatusActor @Inject()
 (
-  config: WorkerConfig,
-  naming: QueueNaming,
+  config:     WorkerConfig,
+  naming:     QueueNaming,
   httpClient: RabbitHttpClient,
   @Assisted("delegator") delegator: ActorRef
 ) extends Actor with ActorLogging {
@@ -55,7 +55,7 @@ final class RabbitQueueStatusActor @Inject()
         val statuses = blocking {
           httpClient.fetchRawHyppoQueueDetails()
         }
-        QueueStatusUpdate(statuses.filter(s => naming.belongsToHyppo(s.queueName)))
+        QueueStatusUpdate(statuses)
       }).onComplete({
         case Success(update) =>
           log.debug(s"Sending queue status update: ${ update }")

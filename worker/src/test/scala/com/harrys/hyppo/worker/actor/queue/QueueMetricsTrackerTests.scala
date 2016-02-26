@@ -2,9 +2,9 @@ package com.harrys.hyppo.worker.actor.queue
 
 import java.time.Duration
 
-import com.harrys.hyppo.worker.{ProcessedDataStub, TestObjects, TestConfig}
-import com.harrys.hyppo.worker.actor.amqp.{QueueHelpers, QueueNaming}
+import com.harrys.hyppo.worker.actor.amqp.QueueNaming
 import com.harrys.hyppo.worker.scheduling.RecentResourceContention
+import com.harrys.hyppo.worker.{ProcessedDataStub, TestConfig, TestObjects}
 import org.scalatest.{Matchers, WordSpec}
 
 /**

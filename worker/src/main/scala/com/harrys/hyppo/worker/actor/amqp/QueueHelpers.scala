@@ -1,6 +1,7 @@
 package com.harrys.hyppo.worker.actor.amqp
 
 import java.io.IOException
+import javax.inject.Inject
 
 import com.harrys.hyppo.config.HyppoConfig
 import com.harrys.hyppo.worker.api.proto.{ConcurrencyWorkResource, IntegrationWorkerInput, ThrottledWorkResource}
@@ -12,7 +13,7 @@ import scala.util.Try
 /**
   * Created by jpetty on 11/4/15.
   */
-final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
+final class QueueHelpers @Inject() (config: HyppoConfig, naming: QueueNaming) {
 
   def this(config: HyppoConfig) = this(config, new QueueNaming(config))
 
@@ -199,6 +200,15 @@ final class QueueHelpers(config: HyppoConfig, naming: QueueNaming) {
 
   def checkQueueSize(connection: Connection, queueName: String) : Int = {
     passiveQueueDeclaration(connection, queueName).map(_.getMessageCount).getOrElse(0)
+  }
+
+  def initializeRequiredQueues(connection: Connection): Unit = {
+    val channel = connection.createChannel()
+    try {
+      createExpiredQueue(channel)
+      createGeneralWorkQueue(channel)
+      createResultsQueue(channel)
+    } finally channel.close()
   }
 
   private def isQueueNotFoundException(root: Throwable) : Boolean = root match {

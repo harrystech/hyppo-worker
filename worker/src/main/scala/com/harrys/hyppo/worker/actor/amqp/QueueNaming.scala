@@ -3,6 +3,7 @@ package com.harrys.hyppo.worker.actor.amqp
 import java.security.MessageDigest
 import java.time.Duration
 import java.util.regex.Pattern
+import javax.inject.Inject
 
 import com.harrys.hyppo.config.HyppoConfig
 import com.harrys.hyppo.worker.actor.queue.ResourceLeasing
@@ -14,7 +15,7 @@ import org.apache.commons.io.Charsets
 /**
   * Created by jpetty on 11/4/15.
   */
-final class QueueNaming(config: HyppoConfig) {
+final class QueueNaming @Inject() (config: HyppoConfig) {
 
   private val prefix: String = config.workQueuePrefix
 

@@ -5,24 +5,28 @@ import com.amazonaws.services.s3.AmazonS3Client
 import com.codahale.metrics.MetricRegistry
 import com.google.inject.{AbstractModule, Provides}
 import com.harrys.hyppo.HyppoCoordinator
-import com.harrys.hyppo.coordinator.{WorkResponseHandler, WorkDispatcher}
+import com.harrys.hyppo.coordinator.{WorkDispatcher, WorkResponseHandler}
 import com.harrys.hyppo.worker.actor.amqp._
+import com.sandinh.akuice.AkkaGuiceSupport
 
 /**
   * Created by jpetty on 2/10/16.
   */
-class HyppoCoordinatorModule(system: ActorSystem,config: CoordinatorConfig) extends AbstractModule {
+class HyppoCoordinatorModule  extends AbstractModule with AkkaGuiceSupport {
 
-  override def configure(): Unit = {
+  override final def configure(): Unit = {
     requireBinding(classOf[WorkResponseHandler])
-    bind(classOf[ActorSystem]).toInstance(system)
-    bind(classOf[CoordinatorConfig]).toInstance(config)
-    bind(classOf[HyppoConfig]).toInstance(config)
-    bind(classOf[MetricRegistry]).asEagerSingleton()
+    requireBinding(classOf[MetricRegistry])
+    requireBinding(classOf[ActorSystem])
+    requireBinding(classOf[CoordinatorConfig])
+    configureSpecializedBindings()
     bind(classOf[ResponseQueueConsumer])
     bind(classOf[EnqueueWorkQueueProxy])
     bind(classOf[WorkDispatcher]).to(classOf[HyppoCoordinator]).asEagerSingleton()
   }
+
+  @Provides
+  def hyppoConfig(config: CoordinatorConfig): HyppoConfig = config
 
   @Provides
   def hyppoQueueNaming(config: CoordinatorConfig): QueueNaming = new QueueNaming(config)
@@ -40,6 +44,5 @@ class HyppoCoordinatorModule(system: ActorSystem,config: CoordinatorConfig) exte
     new AmazonS3Client(config.awsCredentialsProvider)
   }
 
-
-
+  protected def configureSpecializedBindings(): Unit = ()
 }

@@ -1,13 +1,15 @@
 package com.harrys.hyppo
 
-import javax.inject.{Singleton, Inject}
+import javax.inject.{Inject, Singleton}
 
 import akka.actor._
 import akka.pattern.gracefulStop
-import com.google.inject.{Provider, Guice, Injector}
+import com.codahale.metrics.MetricRegistry
+import com.google.inject.{Guice, Injector, Provider}
 import com.harrys.hyppo.config.{HyppoWorkerModule, WorkerConfig}
 import com.harrys.hyppo.util.ConfigUtils
 import com.harrys.hyppo.worker.actor.WorkerFSM
+import com.harrys.hyppo.worker.actor.amqp.QueueHelpers
 import com.harrys.hyppo.worker.actor.queue.WorkDelegation
 import com.sandinh.akuice.ActorInject
 import com.thenewmotion.akka.rabbitmq._
@@ -22,17 +24,15 @@ import scala.concurrent.{Await, Future}
 @Singleton
 final class HyppoWorker @Inject()
 (
+  injectorProvider: Provider[Injector],
   system:           ActorSystem,
   config:           WorkerConfig,
-  injectorProvider: Provider[Injector]
+  workerFactory:    WorkerFSM.Factory
 ) extends ActorInject {
 
   override def injector: Injector = injectorProvider.get()
 
-  //  Kick off baseline queue creation
-  HyppoCoordinator.initializeBaseQueues(config)
-
-  val connection = system.actorOf(ConnectionActor.props(config.rabbitMQConnectionFactory, reconnectionDelay = config.rabbitMQTimeout), name = "rabbitmq")
+  val connection = system.actorOf(ConnectionActor.props(config.rabbitMQConnectionFactory, reconnectionDelay = config.rabbitMQTimeout, initializeConnection), name = "rabbitmq")
 
   val delegation = injectTopActor[WorkDelegation]("delegation")
   val workerFSMs = (1 to config.workerCount).inclusive.map(i => createWorker(i))
@@ -47,11 +47,14 @@ final class HyppoWorker @Inject()
 
   def awaitSystemTermination() : Unit = system.awaitTermination()
 
-  def createWorker(number: Int): ActorRef = {
+  private def createWorker(number: Int): ActorRef = {
     implicit val topLevel = system
-    val name    = "worker-%02d".format(number)
-    val factory = injector.getInstance(classOf[WorkerFSM.Factory])
-    injectActor(factory(delegation, connection), name)
+    injectActor(workerFactory(delegation, connection), "worker-%02d".format(number))
+  }
+
+  private def initializeConnection(connection: Connection, actor: ActorRef): Unit = {
+    val helpers = new QueueHelpers(config)
+    helpers.initializeRequiredQueues(connection)
   }
 }
 
@@ -61,12 +64,15 @@ object HyppoWorker {
     apply(system, createConfig(system.settings.config))
   }
 
-  def apply(system: ActorSystem, config: WorkerConfig): HyppoWorker = {
-    apply(system, config, new HyppoWorkerModule(system, config))
-  }
-
-  def apply[M <: HyppoWorkerModule](system: ActorSystem, config: WorkerConfig, module: M): HyppoWorker = {
-    val injector = Guice.createInjector(new HyppoWorkerModule(system, config))
+  def apply[M <: HyppoWorkerModule](system: ActorSystem, config: WorkerConfig): HyppoWorker = {
+    val module = new HyppoWorkerModule {
+      override protected def configureSpecializedBindings(): Unit = {
+        bind(classOf[ActorSystem]).toInstance(system)
+        bind(classOf[WorkerConfig]).toInstance(config)
+        bind(classOf[MetricRegistry]).asEagerSingleton()
+      }
+    }
+    val injector = Guice.createInjector(module)
     injector.getInstance(classOf[HyppoWorker])
   }
 

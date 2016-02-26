@@ -1,19 +1,10 @@
 package com.harrys.hyppo.worker.scheduling
 
-import java.time.temporal.ChronoUnit
-import java.time._
-
-import com.harrys.hyppo.source.api.model.IngestionSource
-import com.harrys.hyppo.worker.{ProcessedDataStub, TestObjects, TestConfig}
+import com.harrys.hyppo.worker.TestConfig
 import com.harrys.hyppo.worker.actor.amqp.{QueueNaming, SingleQueueDetails}
-import com.harrys.hyppo.worker.api.code.ExecutableIntegration
-import com.harrys.hyppo.worker.api.proto.{ThrottledWorkResource, WorkResource}
-import com.typesafe.config.ConfigFactory
 import org.scalacheck.Gen
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalatest.{PropSpec, Matchers, WordSpec}
-
-import scala.collection.immutable.NumericRange
+import org.scalatest.{Matchers, PropSpec}
 
 /**
   * Created by jpetty on 2/22/16.

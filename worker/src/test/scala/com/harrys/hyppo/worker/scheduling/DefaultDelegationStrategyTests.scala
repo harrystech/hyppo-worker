@@ -1,7 +1,7 @@
 package com.harrys.hyppo.worker.scheduling
 
 import com.harrys.hyppo.worker.TestConfig
-import com.harrys.hyppo.worker.actor.amqp.{SingleQueueDetails, QueueNaming}
+import com.harrys.hyppo.worker.actor.amqp.{QueueNaming, SingleQueueDetails}
 import com.harrys.hyppo.worker.api.code.ExecutableIntegration
 import org.scalacheck.Gen
 import org.scalatest.prop.GeneratorDrivenPropertyChecks

@@ -4,14 +4,13 @@ import javax.inject.{Inject, Singleton}
 
 import akka.actor._
 import akka.pattern.gracefulStop
-import com.google.inject.{Provider, Injector}
-import com.harrys.hyppo.config.{CoordinatorConfig, HyppoConfig}
-import com.harrys.hyppo.coordinator.{WorkDispatcher, WorkResponseHandler}
+import com.google.inject.{Injector, Provider}
+import com.harrys.hyppo.config.CoordinatorConfig
+import com.harrys.hyppo.coordinator.WorkDispatcher
 import com.harrys.hyppo.util.ConfigUtils
 import com.harrys.hyppo.worker.actor.amqp._
 import com.harrys.hyppo.worker.api.proto.WorkerInput
 import com.sandinh.akuice.ActorInject
-import com.thenewmotion.akka.rabbitmq._
 import com.typesafe.config.Config
 
 import scala.concurrent.Await
@@ -23,15 +22,13 @@ import scala.concurrent.Await
 @Singleton
 final class HyppoCoordinator @Inject()
 (
-  system:     ActorSystem,
-  config:     CoordinatorConfig,
-  httpClient: RabbitHttpClient,
-  injectorProvider: Provider[Injector]
+  injectorProvider: Provider[Injector],
+  system:           ActorSystem,
+  config:           CoordinatorConfig,
+  httpClient:       RabbitHttpClient
 ) extends WorkDispatcher with ActorInject {
 
   override def injector: Injector = injectorProvider.get
-
-  HyppoCoordinator.initializeBaseQueues(config)
 
   private val responseActor   = injectTopActor[ResponseQueueConsumer]("responses")
   private val enqueueProxy    = injectTopActor[EnqueueWorkQueueProxy]("enqueue-proxy")
@@ -54,6 +51,7 @@ final class HyppoCoordinator @Inject()
   }
 
   override def fetchLogicalHyppoQueueDetails() : Seq[QueueDetails]   = httpClient.fetchLogicalHyppoQueueDetails()
+
   override def fetchRawHyppoQueueDetails() : Seq[SingleQueueDetails] = httpClient.fetchRawHyppoQueueDetails()
 }
 
@@ -61,7 +59,7 @@ final class HyppoCoordinator @Inject()
 
 object HyppoCoordinator {
 
-  def createConfig(appConfig: Config) : CoordinatorConfig = {
+  def createConfig(appConfig: Config): CoordinatorConfig = {
     val config = appConfig.withFallback(referenceConfig())
 
     val merged = requiredConfig().
@@ -75,17 +73,4 @@ object HyppoCoordinator {
 
   def referenceConfig(): Config = ConfigUtils.resourceFileConfig("/com/harrys/hyppo/config/reference.conf")
 
-  def initializeBaseQueues(config: HyppoConfig): Unit = {
-    val helpers    = new QueueHelpers(config)
-    val connection = config.rabbitMQConnectionFactory.newConnection()
-    try {
-      val channel  = connection.createChannel()
-      helpers.createExpiredQueue(channel)
-      helpers.createGeneralWorkQueue(channel)
-      helpers.createResultsQueue(channel)
-      channel.close()
-    } finally {
-      connection.close()
-    }
-  }
 }

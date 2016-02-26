@@ -1,14 +1,18 @@
 package com.harrys.hyppo.coordinator
 
 import akka.actor.ActorSystem
-import com.google.inject.AbstractModule
+import com.codahale.metrics.MetricRegistry
+import com.harrys.hyppo.config.{CoordinatorConfig, HyppoCoordinatorModule}
 
 /**
   * Created by jpetty on 2/26/16.
   */
-class CoordinatorLocalTestModule extends AbstractModule {
+class CoordinatorLocalTestModule(system: ActorSystem, config: CoordinatorConfig) extends HyppoCoordinatorModule {
 
-  override def configure(): Unit = {
+  override protected def configureSpecializedBindings(): Unit = {
     bind(classOf[WorkResponseHandler]).to(classOf[NoOpWorkResponseHandler])
+    bind(classOf[MetricRegistry]).asEagerSingleton()
+    bind(classOf[ActorSystem]).toInstance(system)
+    bind(classOf[CoordinatorConfig]).toInstance(config)
   }
 }

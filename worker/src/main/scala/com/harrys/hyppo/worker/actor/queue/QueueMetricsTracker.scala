@@ -5,7 +5,7 @@ import javax.inject.Inject
 import com.google.inject.ImplementedBy
 import com.harrys.hyppo.util.TimeUtils
 import com.harrys.hyppo.worker.actor.amqp.RabbitQueueStatusActor.{PartialStatusUpdate, QueueStatusUpdate}
-import com.harrys.hyppo.worker.actor.amqp.{MultiQueueDetails, QueueHelpers, QueueNaming, SingleQueueDetails}
+import com.harrys.hyppo.worker.actor.amqp.{MultiQueueDetails, QueueNaming, SingleQueueDetails}
 import com.harrys.hyppo.worker.api.proto.{ConcurrencyWorkResource, ThrottledWorkResource, WorkResource}
 import com.harrys.hyppo.worker.scheduling.{RecentResourceContention, ResourceQueueMetrics, WorkQueueMetrics}
 import com.typesafe.scalalogging.Logger

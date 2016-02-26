@@ -44,10 +44,10 @@ libraryDependencies ++= Seq(
 
 //  Set the classpath so we can fork a new JVM
 testOptions in Test += Tests.Setup(() => {
-  System.setProperty("testing.classpath", (fullClasspath in Test).value.files.map(_.getAbsolutePath).mkString(":"))
+  System.setProperty("testing.classpath", (fullClasspath in Test).value.files.map(_.getAbsolutePath).distinct.mkString(":"))
 })
 
-javaOptions in Test += "-Dtesting.classpath=" + (fullClasspath in Test).value.files.map(_.getAbsolutePath).mkString(":")
+javaOptions in Test += "-Dtesting.classpath=" + (fullClasspath in Test).value.files.map(_.getAbsolutePath).distinct.mkString(":")
 
 //  Setup the frameworks explicitly to keep ScalaCheck from running separately
 testFrameworks in Test := Seq(TestFrameworks.ScalaTest)

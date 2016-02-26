@@ -4,7 +4,7 @@ import javax.inject.Inject
 
 import akka.actor._
 import akka.pattern.gracefulStop
-import com.google.inject.{Provider, Injector}
+import com.google.inject.{Injector, Provider}
 import com.harrys.hyppo.Lifecycle
 import com.harrys.hyppo.Lifecycle.ImpendingShutdown
 import com.harrys.hyppo.config.CoordinatorConfig
@@ -21,16 +21,16 @@ import scala.concurrent.Await
  */
 final class ResponseQueueConsumer @Inject()
 (
+  injectorProvider: Provider[Injector],
   config:           CoordinatorConfig,
   handler:          WorkResponseHandler,
-  helpers:          QueueHelpers,
-  injectorProvider: Provider[Injector]
+  helpers:          QueueHelpers
 ) extends Actor with ActorLogging with ActorInject {
 
-  val serializer = new AMQPSerialization(config.secretKey)
   override def injector: Injector = injectorProvider.get
 
-  val connection = injectActor(new ConnectionActor(config.rabbitMQConnectionFactory, config.rabbitMQTimeout, (_, _) => ()), "rabbitmq")
+  val serializer = new AMQPSerialization(config.secretKey)
+  val connection = injectActor(new ConnectionActor(config.rabbitMQConnectionFactory, config.rabbitMQTimeout, initializeConnection), "rabbitmq")
 
   def connected(consumerChannel: ActorRef): Receive = {
     case ChannelCreated(newChannel) =>
@@ -73,17 +73,6 @@ final class ResponseQueueConsumer @Inject()
       context.stop(self)
   }
 
-  def configureResponseQueueConsumer(channel: Channel, channelActor: ActorRef): Unit = {
-    channel.basicQos(1)
-    val autoAck     = false
-    val resultQueue = helpers.createResultsQueue(channel).getQueue
-    val expireQueue = helpers.createExpiredQueue(channel).getQueue
-    val resultTag   = channel.basicConsume(resultQueue, autoAck, new ResponseConsumer(channel))
-    log.debug(s"Starting response consumer $resultTag to listen on queue: $resultQueue")
-    val expireTag   = channel.basicConsume(expireQueue, autoAck, new ExpiredConsumer(channel))
-    log.debug(s"Starting expired consumer $expireTag to consumer from queue: $expireQueue")
-  }
-
   private final class ResponseConsumer(channel: Channel) extends DefaultConsumer(channel) {
 
     override def handleDelivery(consumerTag: String, envelope: Envelope, properties: BasicProperties, body: Array[Byte]) : Unit = {
@@ -100,9 +89,11 @@ final class ResponseQueueConsumer @Inject()
       }
     }
 
-    private def handleSingle(response: WorkerResponse) : Unit = response match {
-      case failed: FailureResponse => handler.handleWorkFailed(failed)
-      case normal => handler.handleWorkCompleted(normal)
+    private def handleSingle(response: WorkerResponse): Unit = response match {
+      case failed: FailureResponse =>
+        handler.handleWorkFailed(failed)
+      case normal =>
+        handler.handleWorkCompleted(normal)
     }
   }
 
@@ -120,5 +111,20 @@ final class ResponseQueueConsumer @Inject()
           throw e
       }
     }
+  }
+
+  private def initializeConnection(connection: Connection, connectionActor: ActorRef): Unit = {
+    helpers.initializeRequiredQueues(connection)
+  }
+
+  private def configureResponseQueueConsumer(channel: Channel, channelActor: ActorRef): Unit = {
+    channel.basicQos(1)
+    val autoAck     = false
+    val resultQueue = helpers.createResultsQueue(channel).getQueue
+    val expireQueue = helpers.createExpiredQueue(channel).getQueue
+    val resultTag   = channel.basicConsume(resultQueue, autoAck, new ResponseConsumer(channel))
+    log.debug(s"Starting response consumer $resultTag to listen on queue: $resultQueue")
+    val expireTag   = channel.basicConsume(expireQueue, autoAck, new ExpiredConsumer(channel))
+    log.debug(s"Starting expired consumer $expireTag to consumer from queue: $expireQueue")
   }
 }

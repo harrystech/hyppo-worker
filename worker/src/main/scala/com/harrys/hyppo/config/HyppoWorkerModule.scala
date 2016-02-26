@@ -20,13 +20,13 @@ import scala.util.Random
 /**
   * Created by jpetty on 2/9/16.
   */
-class HyppoWorkerModule(system: ActorSystem, config: WorkerConfig) extends AbstractModule with AkkaGuiceSupport {
+class HyppoWorkerModule extends AbstractModule with AkkaGuiceSupport {
 
   override final def configure(): Unit = {
-    bind(classOf[MetricRegistry]).asEagerSingleton()
-    bind(classOf[ActorSystem]).toInstance(system)
-    bind(classOf[WorkerConfig]).toInstance(config)
-    bind(classOf[HyppoConfig]).toInstance(config)
+    requireBinding(classOf[ActorSystem])
+    requireBinding(classOf[WorkerConfig])
+    requireBinding(classOf[MetricRegistry])
+    configureSpecializedBindings()
     //  Opportunity for overrides
     bind(classOf[QueueMetricsTracker]).to(workQueueManagerClass)
     bind(classOf[DelegationStrategy]).to(delegationStrategyClass)
@@ -78,6 +78,9 @@ class HyppoWorkerModule(system: ActorSystem, config: WorkerConfig) extends Abstr
   def random: Random = Random
 
   @Provides
+  def hyppoConfig(config: WorkerConfig): HyppoConfig = config
+
+  @Provides
   def hyppoQueueNaming(config: WorkerConfig): QueueNaming = new QueueNaming(config)
 
   @Provides
@@ -98,4 +101,6 @@ class HyppoWorkerModule(system: ActorSystem, config: WorkerConfig) extends Abstr
   def createAmazonS3Client(config: WorkerConfig): AmazonS3Client = {
     new AmazonS3Client(config.awsCredentialsProvider)
   }
+
+  protected def configureSpecializedBindings(): Unit = ()
 }

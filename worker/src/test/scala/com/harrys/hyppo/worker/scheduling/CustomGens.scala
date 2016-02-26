@@ -1,13 +1,13 @@
 package com.harrys.hyppo.worker.scheduling
 
-import java.time.temporal.ChronoUnit
 import java.time._
+import java.time.temporal.ChronoUnit
 
 import com.harrys.hyppo.source.api.model.IngestionSource
 import com.harrys.hyppo.worker.actor.amqp.{QueueNaming, SingleQueueDetails}
-import com.harrys.hyppo.worker.api.proto.WorkResource
-import com.harrys.hyppo.worker.{TestObjects, ProcessedDataStub}
 import com.harrys.hyppo.worker.api.code.ExecutableIntegration
+import com.harrys.hyppo.worker.api.proto.WorkResource
+import com.harrys.hyppo.worker.{ProcessedDataStub, TestObjects}
 import com.typesafe.config.ConfigFactory
 import org.scalacheck.Gen
 

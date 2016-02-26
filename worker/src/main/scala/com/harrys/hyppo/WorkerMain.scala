@@ -53,6 +53,8 @@ object WorkerMain {
     }))
     //  Instantiate the workers and start processing
     val worker = HyppoWorker(system, config)
+
+    // Wait for shutdown
     worker.awaitSystemTermination()
   }
 }
