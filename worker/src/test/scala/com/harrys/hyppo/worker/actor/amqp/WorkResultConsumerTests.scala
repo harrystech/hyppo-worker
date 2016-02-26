@@ -1,9 +1,12 @@
 package com.harrys.hyppo.worker.actor.amqp
 
+import akka.actor.ActorSystem
 import akka.pattern.gracefulStop
 import akka.testkit.TestActorRef
+import com.google.inject.{AbstractModule, Guice}
 import com.harrys.hyppo.Lifecycle
-import com.harrys.hyppo.coordinator.WorkResponseHandler
+import com.harrys.hyppo.config.{CoordinatorConfig, HyppoCoordinatorModule}
+import com.harrys.hyppo.coordinator.{CoordinatorLocalTestModule, WorkResponseHandler}
 import com.harrys.hyppo.worker.TestConfig
 import com.harrys.hyppo.worker.actor.RabbitMQTests
 import com.harrys.hyppo.worker.api.proto._
@@ -16,16 +19,12 @@ import scala.concurrent.Await
  */
 class WorkResultConsumerTests extends RabbitMQTests("WorkResultConsumerTests", TestConfig.coordinatorWithRandomQueuePrefix()) with Eventually {
 
-  val handler = new WorkResponseHandler {
-    override def handleWorkCompleted(response: WorkerResponse): Unit = {}
-    override def handleWorkFailed(failed: FailureResponse): Unit = {}
-    override def handleWorkExpired(expired: WorkerInput): Unit = {}
-  }
-
   override implicit val patienceConfig = PatienceConfig(timeout = config.rabbitMQTimeout * 8, interval = config.rabbitMQTimeout / 4)
 
+  val injector = TestConfig.localCoordinatorInjector(system, config)
+
   "The WorkResultConsumer" must {
-    val consumer = TestActorRef(new ResponseQueueConsumer(config, connectionActor, handler), "consumer")
+    val consumer = TestActorRef(injector.getInstance(classOf[ResponseQueueConsumer]), "consumer")
 
     "handle the initialize message" in {
       consumer ! Lifecycle.ApplicationStarted

@@ -13,8 +13,10 @@ import com.harrys.hyppo.worker.{TestConfig, TestObjects}
 class QueueProxyActorTests extends RabbitMQTests("QueueProxyActorTests", TestConfig.coordinatorWithRandomQueuePrefix())  {
 
 
+  val injector = TestConfig.localCoordinatorInjector(system, config)
+
   "The Queue Proxy" must {
-    val proxy = TestActorRef(new EnqueueWorkQueueProxy(config))
+    val proxy = TestActorRef(injector.getInstance(classOf[EnqueueWorkQueueProxy]), "enqueue")
 
     "successfully enqueue messages" in {
       val source      =  TestObjects.testIngestionSource(name = "queue proxy")

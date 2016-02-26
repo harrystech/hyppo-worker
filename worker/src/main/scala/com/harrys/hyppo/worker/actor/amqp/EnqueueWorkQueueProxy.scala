@@ -1,6 +1,9 @@
 package com.harrys.hyppo.worker.actor.amqp
 
+import javax.inject.Inject
+
 import akka.actor.{Actor, ActorLogging}
+import com.codahale.metrics.MetricRegistry
 import com.harrys.hyppo.config.CoordinatorConfig
 import com.harrys.hyppo.util.TimeUtils
 import com.harrys.hyppo.worker.api.proto._
@@ -11,14 +14,21 @@ import scala.util.{Failure, Success, Try}
 /**
  * Created by jpetty on 9/16/15.
  */
-final class EnqueueWorkQueueProxy(config: CoordinatorConfig) extends Actor with ActorLogging {
+final class EnqueueWorkQueueProxy @Inject()
+(
+  config:       CoordinatorConfig,
+  queueNaming:  QueueNaming,
+  queueHelpers: QueueHelpers,
+  metrics:      MetricRegistry
+) extends Actor with ActorLogging {
 
   val serializer      = new AMQPSerialization(config.secretKey)
-  val queueNaming     = new QueueNaming(config)
-  val queueHelpers    = new QueueHelpers(config, queueNaming)
   val localConnection = config.rabbitMQConnectionFactory.newConnection()
   val enqueueChannel  = localConnection.createChannel()
   initializeChannel(enqueueChannel)
+
+  val successCount = metrics.counter("hyppo.enqueue.success")
+  val failureCount = metrics.counter("hyppo.enqueue.failure")
 
   override def postStop() : Unit = {
     Try(enqueueChannel.close())
@@ -30,32 +40,37 @@ final class EnqueueWorkQueueProxy(config: CoordinatorConfig) extends Actor with 
   override def receive: Receive = {
     case work: WorkerInput =>
       Try(publishToQueue(work)) match {
-        case Success(_) => log.debug(s"Successfully enqueued work execution: ${ work.executionId }")
+        case Success(_) =>
+          log.debug("Successfully enqueued work execution: {}", work.executionId)
         case Failure(e) =>
-          log.error(e, s"Failed to enqueue work execution: ${ work.executionId }. Retrying after actor restart")
+          log.error(e, "Failed to enqueue work execution: {}. Retrying after actor restart", work.executionId)
           self ! RetryEnqueue(work)
-          throw e
+          throw new Exception("Restarting enqueue proxy due to enqueue failure", e)
       }
 
     case RetryEnqueue(work) =>
       Try(publishToQueue(work)) match {
-        case Success(_) => log.debug(s"Successfully enqueued work execution after retry: ${ work.executionId }")
+        case Success(_) =>
+          log.debug("Successfully enqueued work execution after retry: {}", work.executionId)
+          successCount.inc()
         case Failure(e) =>
-          log.error(e, s"Permanently failed to enqueue work execution: ${ work.executionId }")
-          throw e
+          log.error(e, "Permanently failed to enqueue work execution: {}", work.executionId)
+          failureCount.inc()
+          throw new Exception("Permanent failure enqueueing work", e)
       }
   }
 
   def publishToQueue(work: WorkerInput): Unit = {
     val queueName = work match {
-      case generalWork: GeneralWorkerInput      => queueNaming.generalQueueName
-      case specificWork: IntegrationWorkerInput => queueHelpers.createIntegrationQueue(enqueueChannel, specificWork).getQueue
+      case _: GeneralWorkerInput     => queueNaming.generalQueueName
+      case i: IntegrationWorkerInput => queueHelpers.createIntegrationQueue(enqueueChannel, i).getQueue
     }
     createRequiredResources(work)
     val body  = serializer.serialize(work)
     val props = AMQPMessageProperties.enqueueProperties(work.executionId, queueNaming.resultsQueueName, TimeUtils.currentLocalDateTime(), TimeUtils.javaDuration(config.workTimeout))
     enqueueChannel.basicPublish("", queueName, true, false, props, body)
     enqueueChannel.waitForConfirms(config.rabbitMQTimeout.toMillis)
+    successCount.inc()
   }
 
   def createRequiredResources(work: WorkerInput) : Unit = {
@@ -67,11 +82,7 @@ final class EnqueueWorkQueueProxy(config: CoordinatorConfig) extends Actor with 
     }
   }
 
-
   def initializeChannel(channel: Channel): Unit = {
-    queueHelpers.createExpiredQueue(channel)
-    queueHelpers.createResultsQueue(channel)
-    queueHelpers.createGeneralWorkQueue(channel)
     channel.confirmSelect()
   }
 }

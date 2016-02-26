@@ -6,6 +6,7 @@ import akka.actor.ActorSystem
 import com.google.inject.{Guice, Injector}
 import com.harrys.hyppo.HyppoWorker
 import com.harrys.hyppo.config.{CoordinatorConfig, HyppoCoordinatorModule, WorkerConfig}
+import com.harrys.hyppo.coordinator.CoordinatorLocalTestModule
 import com.harrys.hyppo.util.ConfigUtils
 import com.typesafe.config.{Config, ConfigValueFactory}
 
@@ -61,7 +62,6 @@ object TestConfig {
   }
 
   def localCoordinatorInjector(system: ActorSystem, config: CoordinatorConfig): Injector = {
-    val module = new HyppoCoordinatorModule(system, config)
-    Guice.createInjector(module)
+    Guice.createInjector(new CoordinatorLocalTestModule(), new HyppoCoordinatorModule(system, config))
   }
 }

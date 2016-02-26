@@ -1,13 +1,17 @@
 package com.harrys.hyppo.worker.actor.amqp
 
+import javax.inject.Inject
+
 import akka.actor._
 import akka.pattern.gracefulStop
+import com.google.inject.{Provider, Injector}
 import com.harrys.hyppo.Lifecycle
 import com.harrys.hyppo.Lifecycle.ImpendingShutdown
 import com.harrys.hyppo.config.CoordinatorConfig
 import com.harrys.hyppo.coordinator.WorkResponseHandler
 import com.harrys.hyppo.worker.api.proto._
 import com.rabbitmq.client.Channel
+import com.sandinh.akuice.ActorInject
 import com.thenewmotion.akka.rabbitmq._
 
 import scala.concurrent.Await
@@ -15,9 +19,18 @@ import scala.concurrent.Await
 /**
  * Created by jpetty on 9/16/15.
  */
-final class ResponseQueueConsumer(config: CoordinatorConfig, connection: ActorRef, handler: WorkResponseHandler) extends Actor with ActorLogging {
-  val queueHelpers        = new QueueHelpers(config)
-  val serializer          = new AMQPSerialization(config.secretKey)
+final class ResponseQueueConsumer @Inject()
+(
+  config:           CoordinatorConfig,
+  handler:          WorkResponseHandler,
+  helpers:          QueueHelpers,
+  injectorProvider: Provider[Injector]
+) extends Actor with ActorLogging with ActorInject {
+
+  val serializer = new AMQPSerialization(config.secretKey)
+  override def injector: Injector = injectorProvider.get
+
+  val connection = injectActor(new ConnectionActor(config.rabbitMQConnectionFactory, config.rabbitMQTimeout, (_, _) => ()), "rabbitmq")
 
   def connected(consumerChannel: ActorRef): Receive = {
     case ChannelCreated(newChannel) =>
@@ -31,9 +44,7 @@ final class ResponseQueueConsumer(config: CoordinatorConfig, connection: ActorRe
       log.info("Shutting down consumer actor")
       try {
         Await.result(gracefulStop(consumerChannel, config.rabbitMQTimeout), config.rabbitMQTimeout)
-      } finally {
-        context.stop(self)
-      }
+      } finally context.stop(self)
 
     case Lifecycle.ApplicationStarted =>
       log.warning("Multiple ApplicationStarted events received. Ignoring request")
@@ -65,8 +76,8 @@ final class ResponseQueueConsumer(config: CoordinatorConfig, connection: ActorRe
   def configureResponseQueueConsumer(channel: Channel, channelActor: ActorRef): Unit = {
     channel.basicQos(1)
     val autoAck     = false
-    val resultQueue = queueHelpers.createResultsQueue(channel).getQueue
-    val expireQueue = queueHelpers.createExpiredQueue(channel).getQueue
+    val resultQueue = helpers.createResultsQueue(channel).getQueue
+    val expireQueue = helpers.createExpiredQueue(channel).getQueue
     val resultTag   = channel.basicConsume(resultQueue, autoAck, new ResponseConsumer(channel))
     log.debug(s"Starting response consumer $resultTag to listen on queue: $resultQueue")
     val expireTag   = channel.basicConsume(expireQueue, autoAck, new ExpiredConsumer(channel))

@@ -1,8 +1,10 @@
 package com.harrys.hyppo
 
+import javax.inject.{Singleton, Inject}
+
 import akka.actor._
 import akka.pattern.gracefulStop
-import com.google.inject.{Guice, Injector}
+import com.google.inject.{Provider, Guice, Injector}
 import com.harrys.hyppo.config.{HyppoWorkerModule, WorkerConfig}
 import com.harrys.hyppo.util.ConfigUtils
 import com.harrys.hyppo.worker.actor.WorkerFSM
@@ -17,31 +19,33 @@ import scala.concurrent.{Await, Future}
 /**
  * Created by jpetty on 8/28/15.
  */
-final class HyppoWorker private(val system: ActorSystem, val settings: WorkerConfig, override val injector: Injector) extends ActorInject {
+@Singleton
+final class HyppoWorker @Inject()
+(
+  system:           ActorSystem,
+  config:           WorkerConfig,
+  injectorProvider: Provider[Injector]
+) extends ActorInject {
+
+  override def injector: Injector = injectorProvider.get()
 
   //  Kick off baseline queue creation
-  HyppoCoordinator.initializeBaseQueues(settings)
+  HyppoCoordinator.initializeBaseQueues(config)
 
-  val connection = system.actorOf(ConnectionActor.props(settings.rabbitMQConnectionFactory, reconnectionDelay = settings.rabbitMQTimeout), name = "rabbitmq")
+  val connection = system.actorOf(ConnectionActor.props(config.rabbitMQConnectionFactory, reconnectionDelay = config.rabbitMQTimeout), name = "rabbitmq")
 
-  val delegation = createDelegationActor()
-  val workerFSMs = (1 to settings.workerCount).inclusive.map(i => createWorker(i))
-
+  val delegation = injectTopActor[WorkDelegation]("delegation")
+  val workerFSMs = (1 to config.workerCount).inclusive.map(i => createWorker(i))
 
   system.registerOnTermination({
     delegation ! Lifecycle.ImpendingShutdown
-    val workerWait  = FiniteDuration(settings.shutdownTimeout.mul(0.8).toMillis, MILLISECONDS)
+    val workerWait  = FiniteDuration(config.shutdownTimeout.mul(0.8).toMillis, MILLISECONDS)
     val futures     = workerFSMs.map(ref => gracefulStop(ref, workerWait, Lifecycle.ImpendingShutdown))
     implicit val ec = system.dispatcher
-    Await.result(Future.sequence(futures), settings.shutdownTimeout)
+    Await.result(Future.sequence(futures), config.shutdownTimeout)
   })
 
   def awaitSystemTermination() : Unit = system.awaitTermination()
-
-  def createDelegationActor(): ActorRef = {
-    implicit val topLevel = system
-    injectActor(injector.getInstance(classOf[WorkDelegation]), "delegation")
-  }
 
   def createWorker(number: Int): ActorRef = {
     implicit val topLevel = system
@@ -62,7 +66,8 @@ object HyppoWorker {
   }
 
   def apply[M <: HyppoWorkerModule](system: ActorSystem, config: WorkerConfig, module: M): HyppoWorker = {
-    new HyppoWorker(system, config, Guice.createInjector(module))
+    val injector = Guice.createInjector(new HyppoWorkerModule(system, config))
+    injector.getInstance(classOf[HyppoWorker])
   }
 
   def createConfig(appConfig: Config): WorkerConfig = {

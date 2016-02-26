@@ -11,6 +11,7 @@ libraryDependencies ++= Seq(
   "org.json4s"        %% "json4s-jackson"  % "3.3.0",         // json4s - scala json interface wrapping jackson
   "commons-io"        %  "commons-io"      % "2.4",           // Handy utils for IO stuff
   "ch.qos.logback"    %  "logback-classic" % "1.1.3",         // Logging API implementation
+  "io.dropwizard.metrics" % "metrics-core" % "3.1.0",         // Metrics Reporting framework
   "com.google.code.findbugs" % "jsr305" % "3.0.0",            // Compile time checks based on annotations
   "com.thenewmotion.akka" %% "akka-rabbitmq" % "1.2.4",       // RabbitMQ client for work negotiation
   "org.apache.httpcomponents" % "httpclient" % "4.5",         // HTTP client for RabbitMQ management API

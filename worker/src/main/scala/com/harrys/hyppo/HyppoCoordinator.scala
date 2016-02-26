@@ -4,11 +4,13 @@ import javax.inject.{Inject, Singleton}
 
 import akka.actor._
 import akka.pattern.gracefulStop
+import com.google.inject.{Provider, Injector}
 import com.harrys.hyppo.config.{CoordinatorConfig, HyppoConfig}
 import com.harrys.hyppo.coordinator.{WorkDispatcher, WorkResponseHandler}
 import com.harrys.hyppo.util.ConfigUtils
 import com.harrys.hyppo.worker.actor.amqp._
 import com.harrys.hyppo.worker.api.proto.WorkerInput
+import com.sandinh.akuice.ActorInject
 import com.thenewmotion.akka.rabbitmq._
 import com.typesafe.config.Config
 
@@ -19,13 +21,20 @@ import scala.concurrent.Await
  * Created by jpetty on 8/28/15.
  */
 @Singleton
-final class HyppoCoordinator @Inject() (system: ActorSystem, config: CoordinatorConfig, handler: WorkResponseHandler) extends WorkDispatcher {
-  private val rabbitMQApi     = config.newRabbitMQApiClient()
+final class HyppoCoordinator @Inject()
+(
+  system:     ActorSystem,
+  config:     CoordinatorConfig,
+  httpClient: RabbitHttpClient,
+  injectorProvider: Provider[Injector]
+) extends WorkDispatcher with ActorInject {
+
+  override def injector: Injector = injectorProvider.get
+
   HyppoCoordinator.initializeBaseQueues(config)
 
-  private val connectionActor = system.actorOf(ConnectionActor.props(config.rabbitMQConnectionFactory, reconnectionDelay = config.rabbitMQTimeout), name = "rabbitmq")
-  private val responseActor   = system.actorOf(Props(classOf[ResponseQueueConsumer], config, connectionActor, handler), name = "responses")
-  private val enqueueProxy    = system.actorOf(Props(classOf[EnqueueWorkQueueProxy], config), name = "enqueue-proxy")
+  private val responseActor   = injectTopActor[ResponseQueueConsumer]("responses")
+  private val enqueueProxy    = injectTopActor[EnqueueWorkQueueProxy]("enqueue-proxy")
 
   system.registerOnTermination(new Runnable {
     override def run(): Unit = stop()
@@ -36,6 +45,7 @@ final class HyppoCoordinator @Inject() (system: ActorSystem, config: Coordinator
   }
 
   def stop(): Unit = {
+    enqueueProxy ! PoisonPill
     Await.result(gracefulStop(responseActor, config.rabbitMQTimeout, Lifecycle.ImpendingShutdown), config.rabbitMQTimeout)
   }
 
@@ -43,22 +53,13 @@ final class HyppoCoordinator @Inject() (system: ActorSystem, config: Coordinator
     enqueueProxy ! work
   }
 
-  override def fetchLogicalHyppoQueueDetails() : Seq[QueueDetails]   = rabbitMQApi.fetchLogicalHyppoQueueDetails()
-  override def fetchRawHyppoQueueDetails() : Seq[SingleQueueDetails] = rabbitMQApi.fetchRawHyppoQueueDetails()
+  override def fetchLogicalHyppoQueueDetails() : Seq[QueueDetails]   = httpClient.fetchLogicalHyppoQueueDetails()
+  override def fetchRawHyppoQueueDetails() : Seq[SingleQueueDetails] = httpClient.fetchRawHyppoQueueDetails()
 }
 
 
 
 object HyppoCoordinator {
-
-  def apply(system: ActorSystem, config: CoordinatorConfig, handler: WorkResponseHandler) : HyppoCoordinator  = {
-    new HyppoCoordinator(system, config, handler)
-  }
-
-  def apply(system: ActorSystem, dispatcher: WorkDispatcher, handler: WorkResponseHandler) : HyppoCoordinator = {
-    val config = createConfig(system.settings.config)
-    apply(system, config, handler)
-  }
 
   def createConfig(appConfig: Config) : CoordinatorConfig = {
     val config = appConfig.withFallback(referenceConfig())

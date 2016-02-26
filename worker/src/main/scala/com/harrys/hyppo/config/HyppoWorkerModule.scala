@@ -4,6 +4,7 @@ import java.time.Duration
 
 import akka.actor.ActorSystem
 import com.amazonaws.services.s3.AmazonS3Client
+import com.codahale.metrics.MetricRegistry
 import com.google.inject.assistedinject.FactoryModuleBuilder
 import com.google.inject.{AbstractModule, Module, Provides}
 import com.harrys.hyppo.worker.actor.amqp.{QueueHelpers, QueueNaming, RabbitHttpClient, RabbitQueueStatusActor}
@@ -19,11 +20,13 @@ import scala.util.Random
 /**
   * Created by jpetty on 2/9/16.
   */
-class HyppoWorkerModule( val system: ActorSystem, val config: WorkerConfig) extends AbstractModule with AkkaGuiceSupport {
+class HyppoWorkerModule(system: ActorSystem, config: WorkerConfig) extends AbstractModule with AkkaGuiceSupport {
 
   override final def configure(): Unit = {
-    bind(classOf[WorkerConfig]).toInstance(config)
+    bind(classOf[MetricRegistry]).asEagerSingleton()
     bind(classOf[ActorSystem]).toInstance(system)
+    bind(classOf[WorkerConfig]).toInstance(config)
+    bind(classOf[HyppoConfig]).toInstance(config)
     //  Opportunity for overrides
     bind(classOf[QueueMetricsTracker]).to(workQueueManagerClass)
     bind(classOf[DelegationStrategy]).to(delegationStrategyClass)
