@@ -13,13 +13,15 @@ libraryDependencies ++= Seq(
   "ch.qos.logback"    %  "logback-classic" % "1.1.3",         // Logging API implementation
   "io.dropwizard.metrics" % "metrics-core" % "3.1.0",         // Metrics Reporting framework
   "com.google.code.findbugs" % "jsr305" % "3.0.0",            // Compile time checks based on annotations
-  "com.thenewmotion.akka" %% "akka-rabbitmq" % "1.2.4",       // RabbitMQ client for work negotiation
+  "com.thenewmotion.akka" %% "akka-rabbitmq" % "1.2.4"
+    exclude("com.typesafe.akka", s"akka-actor_${ scalaBinaryVersion.value }"), // RabbitMQ client for work negotiation
   "org.apache.httpcomponents" % "httpclient" % "4.5",         // HTTP client for RabbitMQ management API
   "com.amazonaws" %  "aws-java-sdk-s3"  % "1.10.54",          // Reading / writing to S3
   "org.joda"      % "joda-convert"      % "1.8",              // Necessary since aws client pulls in joda time without this dependency and the compiler complains
   "com.google.inject" % "guice"         % GuiceVersion,       // Dependency injection
   "com.google.inject.extensions" % "guice-assistedinject" % GuiceVersion,
-  "com.sandinh" %% "akka-guice" % "3.1.1" excludeAll ExclusionRule(organization = "com.typesafe.akka"),
+  "com.sandinh" %% "akka-guice" % "3.1.1"
+    exclude("com.typesafe.akka", s"akka-actor_${ scalaBinaryVersion.value }"),
   "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0" exclude("org.scala-lang", "scala-reflect")  // scala logging API
 )
 
