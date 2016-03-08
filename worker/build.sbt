@@ -1,6 +1,6 @@
 name := "worker"
 
-val AkkaVersion = "2.3.13"
+val AkkaVersion = "2.4.2"
 
 val GuiceVersion = "4.0"
 
@@ -13,25 +13,17 @@ libraryDependencies ++= Seq(
   "ch.qos.logback"    %  "logback-classic" % "1.1.3",         // Logging API implementation
   "io.dropwizard.metrics" % "metrics-core" % "3.1.0",         // Metrics Reporting framework
   "com.google.code.findbugs" % "jsr305" % "3.0.0",            // Compile time checks based on annotations
-  "com.thenewmotion.akka" %% "akka-rabbitmq" % "1.2.4"
+  "com.thenewmotion.akka" %% "akka-rabbitmq" % "2.2"
     exclude("com.typesafe.akka", s"akka-actor_${ scalaBinaryVersion.value }"), // RabbitMQ client for work negotiation
   "org.apache.httpcomponents" % "httpclient" % "4.5",         // HTTP client for RabbitMQ management API
   "com.amazonaws" %  "aws-java-sdk-s3"  % "1.10.54",          // Reading / writing to S3
   "org.joda"      % "joda-convert"      % "1.8",              // Necessary since aws client pulls in joda time without this dependency and the compiler complains
   "com.google.inject" % "guice"         % GuiceVersion,       // Dependency injection
   "com.google.inject.extensions" % "guice-assistedinject" % GuiceVersion,
-  "com.sandinh" %% "akka-guice" % "3.1.1"
+  "com.sandinh" %% "akka-guice" % "3.1.2"
     exclude("com.typesafe.akka", s"akka-actor_${ scalaBinaryVersion.value }"),
   "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0" exclude("org.scala-lang", "scala-reflect")  // scala logging API
 )
-
-mainClass in run := Some("com.harrys.hyppo.WorkerMain")
-
-val configFile = (resourceDirectory in Test).map { _  / "hyppo-test.conf" }
-
-javaOptions ++= Seq(s"-Dconfig.file=${ configFile.value.toString }")
-
-fork in run := true
 
 // --
 //  Testing Setup
@@ -48,8 +40,6 @@ libraryDependencies ++= Seq(
 testOptions in Test += Tests.Setup(() => {
   System.setProperty("testing.classpath", (fullClasspath in Test).value.files.map(_.getAbsolutePath).distinct.mkString(":"))
 })
-
-javaOptions in Test += "-Dtesting.classpath=" + (fullClasspath in Test).value.files.map(_.getAbsolutePath).distinct.mkString(":")
 
 //  Setup the frameworks explicitly to keep ScalaCheck from running separately
 testFrameworks in Test := Seq(TestFrameworks.ScalaTest)

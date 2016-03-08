@@ -7,6 +7,7 @@ import com.typesafe.config.{ConfigFactory, ConfigRenderOptions}
 import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.Await
 import scala.concurrent.duration._
 
 
@@ -43,11 +44,9 @@ object WorkerMain {
     val system = ActorSystem("hyppo", config.underlying)
     Runtime.getRuntime.addShutdownHook(new Thread(new Runnable {
       override def run() : Unit = {
-        if (!system.isTerminated){
-          system.shutdown()
-          log.info("Waiting for akka system shutdown...")
-          system.awaitTermination(Duration(8, SECONDS))
-        }
+        val terminated = system.terminate()
+        log.info("Waiting for akka system shutdown...")
+        Await.result(terminated, Duration(8, SECONDS))
         log.info("ActorSystem shutdown complete")
       }
     }))
@@ -55,6 +54,6 @@ object WorkerMain {
     val worker = HyppoWorker(system, config)
 
     // Wait for shutdown
-    worker.awaitSystemTermination()
+    worker.awaitSystemTermination(Duration.Inf)
   }
 }

@@ -45,7 +45,9 @@ final class HyppoWorker @Inject()
     Await.result(Future.sequence(futures), config.shutdownTimeout)
   })
 
-  def awaitSystemTermination() : Unit = system.awaitTermination()
+  def awaitSystemTermination(timeout: Duration): Unit = {
+    Await.result(system.terminate(), timeout)
+  }
 
   private def createWorker(number: Int): ActorRef = {
     implicit val topLevel = system
