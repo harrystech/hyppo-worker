@@ -8,7 +8,7 @@
     </appender>
     <logger name="com.harrys.hyppo" level="INFO" />
     <logger name="akka" level="WARN" />
-    <root level="INFO">
+    <root level="WARN">
         <appender-ref ref="STDOUT" />
     </root>
 </configuration>

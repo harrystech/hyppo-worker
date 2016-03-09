@@ -6,7 +6,7 @@ object HyppoWorker {
   final val ApiVersion    = "0.6.4"
 
   //  This is the version that all components will share when published
-  final val WorkerVersion = "0.7.3"
+  final val WorkerVersion = "0.7.4-SNAPSHOT"
 
   lazy val universalSettings = Seq(
     organization := "com.harrys.hyppo",
@@ -16,7 +16,7 @@ object HyppoWorker {
   ) ++ publishSettings
 
   lazy val scalaSettings = Seq(
-    scalaVersion := "2.11.7",
+    scalaVersion := "2.11.8",
     scalacOptions ++= DefaultOptions.scalac,
     scalacOptions in (Compile, compile) ++= Seq("-deprecation", "–unchecked", "-feature", "-Xlint"),
     scalacOptions in (Compile, doc) := DefaultOptions.scalac,
