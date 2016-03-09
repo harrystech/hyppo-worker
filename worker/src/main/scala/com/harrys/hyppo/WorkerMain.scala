@@ -42,18 +42,18 @@ object WorkerMain {
     }
 
     val system = ActorSystem("hyppo", config.underlying)
+    //  Instantiate the workers and start processing
+    val worker = HyppoWorker(system, config)
     Runtime.getRuntime.addShutdownHook(new Thread(new Runnable {
       override def run() : Unit = {
         val terminated = system.terminate()
         log.info("Waiting for akka system shutdown...")
-        Await.result(terminated, Duration(8, SECONDS))
+        worker.shutdownActorSystem(Duration(8, SECONDS))
         log.info("ActorSystem shutdown complete")
       }
     }))
-    //  Instantiate the workers and start processing
-    val worker = HyppoWorker(system, config)
 
     // Wait for shutdown
-    worker.awaitSystemTermination(Duration.Inf)
+    worker.suspendUntilSystemTermination()
   }
 }

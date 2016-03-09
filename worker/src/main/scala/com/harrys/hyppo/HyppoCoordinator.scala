@@ -33,8 +33,9 @@ final class HyppoCoordinator @Inject()
   private val responseActor   = injectTopActor[ResponseQueueConsumer]("responses")
   private val enqueueProxy    = injectTopActor[EnqueueWorkQueueProxy]("enqueue-proxy")
 
-  system.registerOnTermination(new Runnable {
-    override def run(): Unit = stop()
+  //  Attempt a graceful stop
+  system.registerOnTermination({
+    this.stop()
   })
 
   def start(): Unit = {
@@ -42,7 +43,7 @@ final class HyppoCoordinator @Inject()
   }
 
   def stop(): Unit = {
-    enqueueProxy ! PoisonPill
+    enqueueProxy  ! PoisonPill
     Await.result(gracefulStop(responseActor, config.rabbitMQTimeout, Lifecycle.ImpendingShutdown), config.rabbitMQTimeout)
   }
 

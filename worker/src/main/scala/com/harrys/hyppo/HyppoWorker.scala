@@ -45,7 +45,11 @@ final class HyppoWorker @Inject()
     Await.result(Future.sequence(futures), config.shutdownTimeout)
   })
 
-  def awaitSystemTermination(timeout: Duration): Unit = {
+  def suspendUntilSystemTermination(): Unit = {
+    Await.result(system.whenTerminated, Duration.Inf)
+  }
+
+  def shutdownActorSystem(timeout: Duration): Unit = {
     Await.result(system.terminate(), timeout)
   }
 

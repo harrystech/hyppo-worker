@@ -44,6 +44,7 @@ final class ResponseQueueConsumer @Inject()
       log.info("Shutting down consumer actor")
       try {
         Await.result(gracefulStop(consumerChannel, config.rabbitMQTimeout), config.rabbitMQTimeout)
+        log.info("Response queue processing stopped")
       } finally context.stop(self)
 
     case Lifecycle.ApplicationStarted =>
