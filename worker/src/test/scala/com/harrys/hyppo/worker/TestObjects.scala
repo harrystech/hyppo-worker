@@ -1,6 +1,7 @@
 package com.harrys.hyppo.worker
 
-import java.util.{Date, UUID}
+import java.time.Instant
+import java.util.UUID
 
 import com.harrys.hyppo.source.api.DataIntegration
 import com.harrys.hyppo.source.api.model.{DataIngestionJob, DataIngestionTask, IngestionSource}
@@ -22,7 +23,7 @@ object TestObjects {
   def testIngestionJob() : DataIngestionJob = testIngestionJob(testIngestionSource())
 
   def testIngestionJob(source: IngestionSource) : DataIngestionJob = {
-    new DataIngestionJob(source, UUID.randomUUID(), ConfigFactory.empty(), new Date())
+    new DataIngestionJob(source, UUID.randomUUID(), ConfigFactory.empty(), Instant.now())
   }
 
   def testIngestionTask() : DataIngestionTask = testIngestionTask(testIngestionJob())
