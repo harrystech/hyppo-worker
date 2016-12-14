@@ -89,12 +89,12 @@ final class WorkerFSM @Inject()
         stay()
       }
 
-    case Event(channelError: ShutdownSignalException, WaitingForJars(execution)) =>
+    case Event(channelError: ShutdownSignalException, _) =>
       log.error(channelError, "Channel closed while loading code. Resources are automatically, released. Going to idle.")
       goto(Idle) using Uninitialized
 
     case Event(Failure(cause), WaitingForJars(execution)) =>
-      log.debug("Failed to load code for commander. Returning to idle", cause)
+      log.warning("Failed to load code for commander. Returning to idle", cause)
       execution.withChannel(c => {
         c.basicReject(execution.headers.deliveryTag, true)
         execution.leases.releaseAll()
@@ -213,8 +213,8 @@ final class WorkerFSM @Inject()
       log.error("Received impending shutdown while in state: {}", state)
       stop()
 
-    case Event(msg, _) =>
-      stop(FSM.Failure("Shutting down. Unexpected message received: " + msg.toString))
+    case Event(msg, state) =>
+      stop(FSM.Failure(s"Shutting down. State $state received unhandled message: $msg"))
   }
 
   onTermination {
