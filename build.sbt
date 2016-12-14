@@ -7,6 +7,7 @@ organization := "com.harrys"
 //  Just for making IntelliJ happy. This project has no sources outside of SBT
 name := "hyppo-worker"
 
+
 //  This project is only for aggregating the others
 publishArtifact := false
 
