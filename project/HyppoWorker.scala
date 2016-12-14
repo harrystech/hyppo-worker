@@ -3,10 +3,10 @@ import sbt._
 
 object HyppoWorker {
   //  This is the version of the canonical source-api that all components will be built against
-  final val ApiVersion    = "1.0.0-SNAPSHOT"
+  val ApiVersion    = "1.0.0-SNAPSHOT"
 
   //  This is the version that all components will share when published
-  final val WorkerVersion = "1.0.0-SNAPSHOT"
+  val WorkerVersion = "1.0.0-SNAPSHOT"
 
   lazy val universalSettings = Seq(
     organization := "com.harrys.hyppo",
